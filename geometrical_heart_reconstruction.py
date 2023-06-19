@@ -181,7 +181,8 @@ def rotate_ventricle(context):
     bpy.ops.transform.rotate(value=angle_y, orient_axis='Y', orient_type='GLOBAL', orient_matrix=((1, 0, 0), (0, 1, 0), (0, 0, 1)), orient_matrix_type='GLOBAL', constraint_axis=(False, True, False), mirror=False, use_proportional_edit=False, proportional_edit_falloff='SMOOTH', proportional_size=1, use_proportional_connected=False, use_proportional_projected=False, release_confirm=True)
     bpy.ops.transform.rotate(value=angle_z, orient_axis='Z', orient_type='GLOBAL', orient_matrix=((1, 0, 0), (0, 1, 0), (0, 0, 1)), orient_matrix_type='GLOBAL', constraint_axis=(False, False, True), mirror=False, use_proportional_edit=False, proportional_edit_falloff='SMOOTH', proportional_size=1, use_proportional_connected=False, use_proportional_projected=False, release_confirm=True)
 
-    # !!! Apply all transformations to do
+    # Apply all transformations
+    bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)
     return True
 
 class MESH_OT_cut_edge_loops(bpy.types.Operator):
@@ -218,7 +219,7 @@ def get_neighbour_vertices(v):
         neighbours_index.append(e.other_vert(v).index)
     return neighbours_index
 
-def dissolve_edge_loops(context, obj): # !!! This can be way more simplified with select_more()
+def dissolve_edge_loops(context, obj): 
     """Dissolve a given amount of edge loops"""
     # Make sure vertex mode is selected
     bpy.context.tool_settings.mesh_select_mode = (True, False, False)
@@ -543,7 +544,7 @@ def select_valve_vertices(context, valve_mode):
     valve_area = bpy.data.objects['Valve_area']
 
     translation, angles, radius_vertical, radius_horizontal = get_valve_data(context, valve_mode)
-    # Rescale, translate and rotate valve area # !!! dafür hab ich eine Funktion
+    # Rescale, translate and rotate valve area
     ratio = 1.05 
     bpy.data.objects[valve_area.name].scale = (ratio * radius_vertical, ratio * radius_horizontal, ratio * (radius_horizontal + radius_vertical) / 2) 
     bpy.data.objects[valve_area.name].location = translation # Set translation
@@ -564,7 +565,7 @@ def select_valve_vertices(context, valve_mode):
             v.select = True
 
     bpy.ops.object.mode_set(mode='OBJECT')
-    bpy.data.objects.remove(bpy.data.objects[valve_area.name], do_unlink=True)    # Remove valve area object!!!
+    bpy.data.objects.remove(bpy.data.objects[valve_area.name], do_unlink=True)    # Remove valve area object
     
 def distance_vec(point1, point2) -> float:
     """Calculate distance between two points in 3D."""
@@ -720,30 +721,6 @@ def add_aorta(context):
     # Modify the copied object to fit in the correct place
     scale_rotate_translate_object(context, aorta, "Aortic", ratio=1)
     return aorta
-
-class MESH_OT_Porous_zone_surfaces(bpy.types.Operator): # Deprecated!!!
-    """Add porous valve surfac mesh into current ventricle for exact transition between ventricle and valve object."""
-    bl_idname = 'heart.add_porous_zone_valves'
-    bl_label = 'Add porous valve surfac mesh into current ventricle for exact transition between ventricle and valve object.'
-
-    def execute(self, context):
-        for obj in context.selected_objects:
-            porous_valve_surface(context, obj)
-            
-        return{'FINISHED'}
-
-def porous_valve_surface(context, obj): # Deprecated!!!
-    """Copy surface of the lower side of the porous valve zones onto the ventricle orifices."""
-    # Add in 3 porous aortic valve components
-    AV_porous_surfaces = ["por_AV_surf"]
-    for surf in AV_porous_surfaces:
-        add_and_join_object(context, obj, surf, "Aortic", ratio=1)
-        merge_overlap(threshold = 0.0001)
-    # Add in 3 porous mitral valve components
-    MV_porous_surfaces = ["por_MV_surf"]
-    for surf in MV_porous_surfaces:
-        add_and_join_object(context, obj, surf, "Mitral", ratio=1)
-        merge_overlap(threshold = 0.0001)
 
 class MESH_OT_Porous_zones(bpy.types.Operator):
     """Add separate porous zone objects (valves, atrium and aorta) into workspace"""
@@ -1087,7 +1064,7 @@ def mesh_connect_apical_and_basal(context):
     """Function of button connect apical and basal"""
     cons_print("Connecting apical and basal regions...")
     selected_objects = context.selected_objects
-    # Initialize names for basal regions !!! Oursourcen in eigene Funktion
+    # Initialize names for basal regions 
     if not context.scene.bool_porous: names = ["basal_0", "basal_1", "basal_2", "basal_3", "basal_4"]
     else: names = ["basal_0"]
     basal_regions = []
@@ -1166,7 +1143,7 @@ def get_valve_state_index(context, counter, frame_EDV):
     if context.scene.bool_porous: return 0
     # Define during which frames the mitral valve has which state
     begin_mvo = 4
-    frames_mv_1 = [begin_mvo, frame_EDV-1] # !!! fill with indices
+    frames_mv_1 = [begin_mvo, frame_EDV-1] #  fill with indices
     frames_mv_2 = [begin_mvo + 1, frame_EDV-2]
     frames_mv_3 = [begin_mvo + 2, frame_EDV-3]
     frames_mv_4 = range(begin_mvo + 3, (frame_EDV-3))
@@ -1228,7 +1205,7 @@ def bridge_edges_ventricle(obj, new_edges_vert_indices):
 
     # Create faces between connecting edges
     bpy.ops.object.mode_set(mode='OBJECT') # Necessary to update in blender
-    # Create faces between edges !!! erst später
+    # Create faces between edges 
     bpy.ops.object.mode_set(mode='EDIT') 
     bpy.ops.mesh.edge_face_add()
     bpy.ops.object.mode_set(mode='OBJECT') 
@@ -1486,14 +1463,14 @@ def dev_tool_indices(context): # Dev-Tool get point information
     """Return indices of currently selected vertices."""
     obj = context.object
     # This works only in edit mode and if an object is selected
-    if obj.mode != 'EDIT': #!!! statt abfrage wechseln
+    if obj.mode != 'EDIT': 
         print('This process only works in edit mode')
         return False
 
     indices = []
     # Get vector-coordinates
     bm = bmesh.from_edit_mesh(obj.data)
-    for v in bm.verts: # !!! lieber in object mode 
+    for v in bm.verts:
         if v.select:
             vertice_coords = obj.matrix_world @ v.co 
             indices.append(v.index)    
@@ -1517,7 +1494,7 @@ def dev_tool_z_coord(context, value):
     return True
 
 class MESH_DEV_edge_index(bpy.types.Operator):
-    """Development tool to print the index between t."""
+    """Development tool to print the index of an edge."""
     bl_idname = 'heart.dev_check_edges'
     bl_label = 'Print edge index between two selected indices'
 
@@ -1526,7 +1503,7 @@ class MESH_DEV_edge_index(bpy.types.Operator):
         return{'FINISHED'}
 
 def check_edges():
-    """Print edge index between two selected indices. !!! Can be deleted later on"""
+    """Print edge index between two selected indices."""
     obj = bpy.context.edit_object
     me = obj.data
     bm = bmesh.from_edit_mesh(me)
@@ -1583,7 +1560,7 @@ def check_all_edges():
 
         
 
-# Deprecated
+# Deprecated!!!
 def get_selected_vertices(context):
     """Return currently selected vertices of active object"""
     obj = context.active_object
@@ -1785,7 +1762,7 @@ class PANEL_Dev_tools(bpy.types.Panel):
 classes = [
     PANEL_Position_Ventricle,
     PANEL_Interpolation, PANEL_Valves, PANEL_Poisson, PANEL_Objects, PANEL_Reconstruction, PANEL_Setup_Variables,  PANEL_Dev_tools, MESH_OT_get_node, MESH_OT_ventricle_rotate, MESH_OT_poisson, MESH_OT_build_valve, MESH_OT_create_valve_orifice, 
-    MESH_OT_support_struct, MESH_OT_connect_valves, MESH_OT_cut_edge_loops, MESH_OT_Add_Atrium, MESH_OT_Add_Aorta, MESH_OT_Porous_zone_surfaces, MESH_OT_Porous_zones, MESH_OT_Quick_Recon, 
+    MESH_OT_support_struct, MESH_OT_connect_valves, MESH_OT_cut_edge_loops, MESH_OT_Add_Atrium, MESH_OT_Add_Aorta, MESH_OT_Porous_zones, MESH_OT_Quick_Recon, 
     MESH_OT_create_basal, MESH_OT_connect_apical_and_basal, MESH_OT_Ventricle_Interpolation, MESH_OT_Add_Vessels_Valves, MESH_DEV_volumes, MESH_DEV_indices, MESH_DEV_edge_index, MESH_DEV_check_all_edges,
 ]
   
