@@ -823,7 +823,7 @@ def find_prototype_ventricle(objects): #!!! very inefficient currently
             smallest_diff = current_diff   
             bpy.types.Scene.prototype_index = counter"""
 
-    # Use max volume ventricle for reference #!!!!!!! prototype choice
+    # Use max volume ventricle for reference #!!! prototype choice
     max = 0
     for counter, vol in enumerate(volumes):
         if vol > max:
@@ -887,14 +887,14 @@ def create_basal_region_for_object(context, copied_prototype):
 
     poisson_basal = create_poisson_from_object_pointcloud(context, copied_prototype)
 
-    remesh_voxel_size = 0.4
-    apply_voxel_remesh(remesh_voxel_size) # Apply Remesh for better mesh quality
+    voxel_size = 0.5
+    apply_voxel_remesh(voxel_size) # Apply Remesh for better mesh quality
 
     # Triangulate remesh
     bpy.ops.object.modifier_add(type='TRIANGULATE')
     bpy.ops.object.modifier_apply(modifier="Triangulate")
 
-    merge_vertices(remesh_voxel_size) # Merge vertices close to each other
+    merge_vertices(voxel_size) # Merge vertices close to each other
 
     deselect_object_vertices(poisson_basal)
     remove_apical_region(context, poisson_basal)
@@ -905,7 +905,39 @@ def create_basal_region_for_object(context, copied_prototype):
     
     # Create exact inputs for the valve boundaries and connect it with the remaining mesh
     basal_regions = insert_valves_into_basal(context, poisson_basal)    
+
+    # Smooth basal region
+    smooth_basal_region(context, voxel_size)
+
     return basal_regions
+
+def smooth_basal_region(context,voxel_size):
+    """Smooth basal region."""
+    bpy.ops.object.mode_set(mode='EDIT') 
+    # Select all vertices in basal region except valve regions and lower orifice loop
+    bpy.ops.mesh.select_all(action="SELECT")
+    bpy.ops.object.vertex_group_set_active(group=str("lower_basal_edge_loop"))
+    bpy.ops.object.vertex_group_deselect()
+    bpy.ops.object.vertex_group_set_active(group=str("AV"))
+    bpy.ops.object.vertex_group_deselect()
+    bpy.ops.object.vertex_group_set_active(group=str("MV"))
+    bpy.ops.object.vertex_group_deselect()
+    bpy.ops.object.vertex_group_set_active(group=str("Aortic_orifice"))
+    bpy.ops.object.vertex_group_deselect()
+    bpy.ops.object.vertex_group_set_active(group=str("Mitral_orifice"))
+    bpy.ops.object.vertex_group_deselect()
+    # Merge close nodes and smooth them
+    bpy.ops.mesh.remove_doubles(threshold=voxel_size / 2, use_sharp_edge_from_normals=False, use_unselected=False)
+    bpy.ops.mesh.vertices_smooth(factor=0.75, repeat=10)
+    # Deselect valve orifice edge loops for a less harsh smoothing transition between valves and basal region
+    bpy.ops.object.vertex_group_set_active(group=str("Aortic_orifice"))
+    bpy.ops.object.vertex_group_select()
+    bpy.ops.object.vertex_group_set_active(group=str("Mitral_orifice"))
+    bpy.ops.object.vertex_group_select()
+    # Merge and smooth again
+    bpy.ops.mesh.remove_doubles(threshold=voxel_size * 0.85, use_sharp_edge_from_normals=False, use_unselected=False)
+    bpy.ops.mesh.vertices_smooth(factor=0.75, repeat=50)     
+    bpy.ops.object.mode_set(mode='OBJECT') 
 
 def compute_height_plane(context):
     """Compute height of the plane used to cut off the apical part from the basal part of the prototype geometry"""
@@ -929,12 +961,12 @@ def apply_voxel_remesh(voxel_size):
     bpy.context.object.modifiers["Remesh"].use_smooth_shade = False
     bpy.ops.object.modifier_apply(modifier="Remesh")
 
-def merge_vertices(remesh_voxel_size):
+def merge_vertices(voxel_size):
     """Merge vertices dependent on voxel size to eliminate vertices close to each other and thus reducing skewness in certain areas."""
     bpy.ops.object.mode_set(mode='EDIT') 
     # Select all vertices
     bpy.ops.mesh.select_all(action='SELECT')
-    bpy.ops.mesh.remove_doubles(threshold=remesh_voxel_size / 2, use_sharp_edge_from_normals=False, use_unselected=True)
+    bpy.ops.mesh.remove_doubles(threshold=voxel_size / 2, use_sharp_edge_from_normals=False, use_unselected=True)
     bpy.ops.object.mode_set(mode='OBJECT')
 
 def remove_apical_region(context, obj):
@@ -977,6 +1009,9 @@ def remove_apical_region(context, obj):
     bpy.ops.object.vertex_group_select()
     
     bpy.ops.mesh.looptools_relax(input='selected', interpolation='linear', iterations='1', regular=True) # Reduce spikes on the cutting edge loop
+    # !!!Flatten lower edge loop
+    bpy.ops.mesh.looptools_flatten(influence=100, lock_x=False, lock_y=False, lock_z=False, plane='best_fit', restriction='none')
+
  
 def insert_valves_into_basal(context, poisson_basal):
     """Insert valve geometry into geometry and connect it to orifice."""
