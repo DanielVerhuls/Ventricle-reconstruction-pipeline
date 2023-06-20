@@ -357,6 +357,7 @@ def get_min_max(obj):
     minim = np.array([1000.0, 1000.0, 1000.0])
     for p in obj.data.vertices:
         vertice_coords = obj.matrix_world @ p.co
+        
         if vertice_coords[0] > maxim[0]:
             maxim[0] = vertice_coords[0]
         if vertice_coords[0] < minim[0]:
@@ -367,8 +368,11 @@ def get_min_max(obj):
             minim[1] = vertice_coords[1]
         if vertice_coords[2] > maxim[2]:
             maxim[2] = vertice_coords[2]
+        cons_print(f"Vertices coordinates z: ({vertice_coords[0]}, {vertice_coords[1]}, {vertice_coords[2]}),   Minima z : {minim[2]}") #!!! cons_prints raus
         if vertice_coords[2] < minim[2]:
             minim[2] = vertice_coords[2]
+    cons_print(f"Maxima: {maxim}")
+    cons_print(f"Minima: {minim}")
     return maxim, minim
 
 def merge_overlap(threshold):
@@ -881,6 +885,7 @@ def create_basal_region_for_object(context, copied_prototype):
     
     # Compute minimal valve value for the position of the cutting plane
     minima = [aortic_min, mitral_min, aortic_min_up, mitral_min_up, aortic_min_down, mitral_min_down]
+    cons_print(f"Minima : {minima}")
     context.scene.min_valves = np.amin(minima)
 
     if not compute_height_plane(context): return False
@@ -1012,7 +1017,6 @@ def remove_apical_region(context, obj):
     # !!!Flatten lower edge loop
     bpy.ops.mesh.looptools_flatten(influence=100, lock_x=False, lock_y=False, lock_z=False, plane='best_fit', restriction='none')
 
- 
 def insert_valves_into_basal(context, poisson_basal):
     """Insert valve geometry into geometry and connect it to orifice."""
     connect_valve_orifice(context, "Aortic", 0) # Currently the same aortic valve is used for all approaches
