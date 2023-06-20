@@ -368,11 +368,8 @@ def get_min_max(obj):
             minim[1] = vertice_coords[1]
         if vertice_coords[2] > maxim[2]:
             maxim[2] = vertice_coords[2]
-        cons_print(f"Vertices coordinates z: ({vertice_coords[0]}, {vertice_coords[1]}, {vertice_coords[2]}),   Minima z : {minim[2]}") #!!! cons_prints raus
         if vertice_coords[2] < minim[2]:
             minim[2] = vertice_coords[2]
-    cons_print(f"Maxima: {maxim}")
-    cons_print(f"Minima: {minim}")
     return maxim, minim
 
 def merge_overlap(threshold):
@@ -916,34 +913,6 @@ def create_basal_region_for_object(context, copied_prototype):
 
     return basal_regions
 
-def smooth_basal_region(context,voxel_size):
-    """Smooth basal region."""
-    bpy.ops.object.mode_set(mode='EDIT') 
-    # Select all vertices in basal region except valve regions and lower orifice loop
-    bpy.ops.mesh.select_all(action="SELECT")
-    bpy.ops.object.vertex_group_set_active(group=str("lower_basal_edge_loop"))
-    bpy.ops.object.vertex_group_deselect()
-    bpy.ops.object.vertex_group_set_active(group=str("AV"))
-    bpy.ops.object.vertex_group_deselect()
-    bpy.ops.object.vertex_group_set_active(group=str("MV"))
-    bpy.ops.object.vertex_group_deselect()
-    bpy.ops.object.vertex_group_set_active(group=str("Aortic_orifice"))
-    bpy.ops.object.vertex_group_deselect()
-    bpy.ops.object.vertex_group_set_active(group=str("Mitral_orifice"))
-    bpy.ops.object.vertex_group_deselect()
-    # Merge close nodes and smooth them
-    bpy.ops.mesh.remove_doubles(threshold=voxel_size / 2, use_sharp_edge_from_normals=False, use_unselected=False)
-    bpy.ops.mesh.vertices_smooth(factor=0.75, repeat=10)
-    # Deselect valve orifice edge loops for a less harsh smoothing transition between valves and basal region
-    bpy.ops.object.vertex_group_set_active(group=str("Aortic_orifice"))
-    bpy.ops.object.vertex_group_select()
-    bpy.ops.object.vertex_group_set_active(group=str("Mitral_orifice"))
-    bpy.ops.object.vertex_group_select()
-    # Merge and smooth again
-    bpy.ops.mesh.remove_doubles(threshold=voxel_size * 0.85, use_sharp_edge_from_normals=False, use_unselected=False)
-    bpy.ops.mesh.vertices_smooth(factor=0.75, repeat=50)     
-    bpy.ops.object.mode_set(mode='OBJECT') 
-
 def compute_height_plane(context):
     """Compute height of the plane used to cut off the apical part from the basal part of the prototype geometry"""
     distance =  context.scene.min_valves - context.scene.max_apical
@@ -1090,6 +1059,34 @@ def connect_valve_orifice_from_reference(context, valve_mode, valve_index, edges
     build_valve_surface(context, obj, valve_mode = valve_mode, ratio = 1, valve_index = valve_index)
     bridge_edges_ventricle(obj, edges_reference)
     
+def smooth_basal_region(context,voxel_size):
+    """Smooth basal region."""
+    bpy.ops.object.mode_set(mode='EDIT') 
+    # Select all vertices in basal region except valve regions and lower orifice loop
+    bpy.ops.mesh.select_all(action="SELECT")
+    bpy.ops.object.vertex_group_set_active(group=str("lower_basal_edge_loop"))
+    bpy.ops.object.vertex_group_deselect()
+    bpy.ops.object.vertex_group_set_active(group=str("AV"))
+    bpy.ops.object.vertex_group_deselect()
+    bpy.ops.object.vertex_group_set_active(group=str("MV"))
+    bpy.ops.object.vertex_group_deselect()
+    bpy.ops.object.vertex_group_set_active(group=str("Aortic_orifice"))
+    bpy.ops.object.vertex_group_deselect()
+    bpy.ops.object.vertex_group_set_active(group=str("Mitral_orifice"))
+    bpy.ops.object.vertex_group_deselect()
+    # Merge close nodes and smooth them
+    bpy.ops.mesh.remove_doubles(threshold=voxel_size / 2, use_sharp_edge_from_normals=False, use_unselected=False)
+    bpy.ops.mesh.vertices_smooth(factor=0.75, repeat=10)
+    # Deselect valve orifice edge loops for a less harsh smoothing transition between valves and basal region
+    bpy.ops.object.vertex_group_set_active(group=str("Aortic_orifice"))
+    bpy.ops.object.vertex_group_select()
+    bpy.ops.object.vertex_group_set_active(group=str("Mitral_orifice"))
+    bpy.ops.object.vertex_group_select()
+    # Merge and smooth again
+    bpy.ops.mesh.remove_doubles(threshold=voxel_size * 0.85, use_sharp_edge_from_normals=False, use_unselected=False)
+    bpy.ops.mesh.vertices_smooth(factor=0.75, repeat=20)     
+    bpy.ops.object.mode_set(mode='OBJECT') 
+
 class MESH_OT_connect_apical_and_basal(bpy.types.Operator):
     """Connect apical and basal region of ventricle"""
     bl_idname = 'heart.connect_apical_and_basal'
@@ -1135,7 +1132,7 @@ def mesh_connect_apical_and_basal(context):
     return True
 
 def combine_apical_and_basal_region(context, basal_regions, prototype, selected_objects):
-    """Combine the two regions by copying the hat for eacth ventricle"""
+    """Combine the two regions by copying the hat for each ventricle."""
     # Deselect (and hide) all objects
     for obj in selected_objects: 
         obj.select_set(False)  
@@ -1146,6 +1143,8 @@ def combine_apical_and_basal_region(context, basal_regions, prototype, selected_
     prepare_geometry_for_bridging(context, prototype, basal_regions[0])
     edge_indices_bridge = bridge_edges_prototype(context, prototype)
     inset_faces_smooth(context)
+
+
     edge_indices_triangulate = triangulate_connection(True, prototype, ref_edge_indices=[])
     bpy.data.objects.remove(prototype, do_unlink=True) # Remove reference object
     # Compute the frame of the end diastole
@@ -1158,6 +1157,7 @@ def combine_apical_and_basal_region(context, basal_regions, prototype, selected_
         bridge_edges_ventricle(obj, edge_indices_bridge)
         # Refine connection
         inset_faces_smooth(context)
+
         # Remove faces before triangulation
         bpy.ops.object.mode_set(mode='EDIT')
         bpy.ops.mesh.select_more()
@@ -1263,14 +1263,20 @@ def get_selected_edges(obj):
 def inset_faces_smooth(context):
     """Create new vertices alonge connection between apical and basal region."""
     distance = context.scene.min_valves - context.scene.max_apical
-    amount_refinement_steps = 2
+    amount_refinement_steps = 1
     bpy.ops.object.mode_set(mode='EDIT')
-    for i in range(amount_refinement_steps):
-        potence  = pow(2, i) # Reduce the offset between newly added edge_loops by factor 2
-        bpy.ops.mesh.inset(thickness=distance / potence, depth=0, use_select_inset=True) # Insert faces along the bridge between apical and basal
-        bpy.ops.mesh.vertices_smooth(factor=5, repeat=10)# Smooth connection between apical and basal region
+
+    for counter, value in enumerate(range(amount_refinement_steps)):
+        cons_print(f"Counter: {counter}, value: {value}")
+        potence  = 4**(counter+1)#pow(4, i) # Reduce the offset between newly added edge_loops by factor 2
+        inset_thickness = distance / potence
+        bpy.ops.mesh.inset(thickness= inset_thickness, depth=0, use_select_inset=True) # Insert faces along the bridge between apical and basal
+        bpy.ops.mesh.vertices_smooth(factor=0.5, repeat=5)  # Smooth connection between apical and basal region
+        cons_print(f"Potence: {potence}")
+        cons_print(f"Inset-distance: {inset_thickness}")
     bpy.ops.object.mode_set(mode='OBJECT')
 
+    
 def triangulate_connection(bool_ref, obj, ref_edge_indices):
     """Triangulate connection between apical and basal region"""
     edges_vert_indices_tri = []
