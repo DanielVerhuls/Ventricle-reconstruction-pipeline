@@ -1275,8 +1275,7 @@ def inset_faces_smooth(context):
         cons_print(f"Potence: {potence}")
         cons_print(f"Inset-distance: {inset_thickness}")
     bpy.ops.object.mode_set(mode='OBJECT')
-
-    
+  
 def triangulate_connection(bool_ref, obj, ref_edge_indices):
     """Triangulate connection between apical and basal region"""
     edges_vert_indices_tri = []
@@ -1329,7 +1328,7 @@ def smooth_connection_and_basal_region(context, obj):
     bpy.ops.object.vertex_group_set_active(group=str("lower_basal_edge_loop"))
     bpy.ops.object.vertex_group_select()  
     # Select edge loops below the connection. Selecting all apical nodes would shrink the ventricle volume.
-    for i in range(5): #range(3)!!!24.05  # Iteratively smooth vertices. This especially smooths the connection on the apical side
+    for i in range(5):  # Iteratively smooth vertices. This especially smooths the connection on the apical side
         bpy.ops.mesh.select_more() # Select edge loops until reaching edgeloop, that wasnt subdivided
         # Deselect valve verts , because they shall not be smoothed out
         bpy.ops.object.vertex_group_set_active(group=str("AV"))
@@ -1338,7 +1337,7 @@ def smooth_connection_and_basal_region(context, obj):
         bpy.ops.object.vertex_group_deselect()
         # Resmooth basal region except valve vertices
 
-        bpy.ops.mesh.vertices_smooth(factor=0.35, repeat=6-i) #!!!24.05 repeat=10
+        bpy.ops.mesh.vertices_smooth(factor=0.35, repeat=6-i) #Continuously weaker smoothing. As hard smoothing creates kinks between smoothed region and usmoothed region
     bpy.ops.object.mode_set(mode='OBJECT')
 
 class MESH_OT_Ventricle_Interpolation(bpy.types.Operator):
@@ -1565,45 +1564,60 @@ def check_edges():
     V1 = verts[0]
     V2 = verts[1]
 
-    if V1 != V2:
-        for e in V1.link_edges: 
-            if e.other_vert(V1) is V2:
-                cons_print(f"Vertex indices : {V1.index}, {V2.index} with edge index: {e.index}")
-    return e.index
+    for e in V1.link_edges: 
+        if e.other_vert(V1) is V2:
+            cons_print(f"Vertex indices : {V1.index}, {V2.index} with edge index: {e.index}")
+            return e.index
+    cons_print(f"Nodes not connected.")
+    return False
 
-class MESH_DEV_check_all_edges(bpy.types.Operator):
-    """Development tool to print the index between t."""
-    bl_idname = 'heart.dev_check_all_edges'
+class MESH_DEV_check_node_connectivity(bpy.types.Operator):
+    """Development tool to check node-connectivity between all selected objects."""
+    bl_idname = 'heart.dev_check_node_connectivity'
     bl_label = 'Check all selected edges between two objects'
 
     def execute(self, context):
-        check_all_edges()
+        check_node_connectivity(context)
         return{'FINISHED'}
 
-def check_all_edges():
-    """!!!"""
-    obj = bpy.context.active_object    
-    """selected_edges_indices, selected_edges_verts = get_selected_edges(obj)
-    cons_print(selected_edges_indices)"""
-    
-
-
-    mesh = bmesh.from_edit_mesh(obj.data)
-    #for e in mesh.edges: 
-    #    if e.index == 30634: e.select_set(True)
-    
-    bpy.ops.object.mode_set(mode = 'OBJECT')
-    for v in obj.data.vertices: 
-        if v.index == 30634: 
-            cons_print(f"Vertex: {v.index} existiert")
-            obj.data.vertices[0].select = True
-             
-            #active_edges_verts.append((e.verts[0].index, e.verts[1].index))
-            #active_edges_indices.append(e.index)
-
-    bpy.ops.object.mode_set(mode = 'EDIT')
-
-        
+def check_node_connectivity(context):
+    """Check node connectivity between all selected objects."""
+    verts = []
+    edges = []
+    faces = []
+    for i, obj in enumerate(context.selected_objects):
+        # Initialize the list of vertices, edges and faces each with their respective connecting vertices.
+        if i == 0:
+            for v in obj.data.vertices: verts.append(v.index)
+            for e in obj.data.edges: edges.append([e.index, e.vertices[0] , e.vertices[1]])
+            for f in obj.data.polygons: faces.append([f.index, f.vertices[0], f.vertices[1], f.vertices[2]])
+        else:
+        # Checks for the length of vertices, edges and faces.
+            # Check if the amount of vertices matches.
+            if len(obj.data.vertices) != len(verts):
+                cons_print(f"Object: {obj.name} has mismatching amount of vertices.")
+                return False
+            # Check if the amount of edges matches.
+            if len(obj.data.edges) != len(edges):
+                cons_print(f"Object: {obj.name} has mismatching amount of edges.")
+                return False
+            # Check if the amount of faces matches.
+            if len(obj.data.polygons) != len(faces):
+                cons_print(f"Object: {obj.name} has mismatching amount of faces.")
+                return False
+        #Connectivity checks.    
+            # Faces-connectivity check.
+            for counter, f in enumerate(obj.data.polygons):
+                if not (faces[counter][0] == f.index and faces[counter][1]== f.vertices[0] and faces[counter][2] ==  f.vertices[1] and faces[counter][3] ==  f.vertices[2]):
+                    cons_print(f"Face mismatch in object: {obj.name} at face {f.index} with face-center at {f.center}.")
+                    return False
+            # Edge-connectivity check.
+            for counter, e in enumerate(obj.data.edges):
+                if not (edges[counter][0] == e.index and edges[counter][1]== e.vertices[0] and edges[counter][2] ==  e.vertices[1]):
+                    cons_print(f"Edge mismatch in object: {obj.name} at edge {e.index}.")
+                    return False  
+    cons_print("Node-connectivity matched for all selected elements.")
+    return True
 
 # Deprecated!!!
 def get_selected_vertices(context):
@@ -1800,7 +1814,7 @@ class PANEL_Dev_tools(bpy.types.Panel):
         row = layout.row()
         layout.operator('heart.dev_check_edges', text= "Get edge index", icon = 'PLUS')
         row = layout.row()
-        layout.operator('heart.dev_check_all_edges', text= "Check all edges", icon = 'PLUS')
+        layout.operator('heart.dev_check_node_connectivity', text= "Node-connectivity check", icon = 'CHECKMARK')
         row = layout.row()
 
 
@@ -1808,7 +1822,7 @@ classes = [
     PANEL_Position_Ventricle,
     PANEL_Interpolation, PANEL_Valves, PANEL_Poisson, PANEL_Objects, PANEL_Reconstruction, PANEL_Setup_Variables,  PANEL_Dev_tools, MESH_OT_get_node, MESH_OT_ventricle_rotate, MESH_OT_poisson, MESH_OT_build_valve, MESH_OT_create_valve_orifice, 
     MESH_OT_support_struct, MESH_OT_connect_valves, MESH_OT_cut_edge_loops, MESH_OT_Add_Atrium, MESH_OT_Add_Aorta, MESH_OT_Porous_zones, MESH_OT_Quick_Recon, 
-    MESH_OT_create_basal, MESH_OT_connect_apical_and_basal, MESH_OT_Ventricle_Interpolation, MESH_OT_Add_Vessels_Valves, MESH_DEV_volumes, MESH_DEV_indices, MESH_DEV_edge_index, MESH_DEV_check_all_edges,
+    MESH_OT_create_basal, MESH_OT_connect_apical_and_basal, MESH_OT_Ventricle_Interpolation, MESH_OT_Add_Vessels_Valves, MESH_DEV_volumes, MESH_DEV_indices, MESH_DEV_edge_index, MESH_DEV_check_node_connectivity,
 ]
   
 def register():
