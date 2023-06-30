@@ -220,7 +220,7 @@ def get_neighbour_vertices(v):
     return neighbours_index
 
 def dissolve_edge_loops(context, obj): 
-    """Dissolve a given amount of edge loops"""
+    """Dissolve a given amount of edge loops."""
     # Make sure vertex mode is selected
     bpy.context.tool_settings.mesh_select_mode = (True, False, False)
     # Transfer object in mesh data
@@ -271,15 +271,94 @@ def dissolve_edge_loops(context, obj):
             v.select = False
     subdivide_last_edge_loop() #Apply subdivide to smooth out further connection
 
-def subdivide_last_edge_loop():
+def subdivide_last_edge_loop(): #!!! maybe erweitern durch anzahl subdivisions in abhaengigkeit des verhaeltnisses zwischen der anzahl der oberen apikalen und unteren basalen nodes.!!!
     """Subdivide last edge loop in two steps before bridging for a smooth transition."""
     bpy.ops.object.mode_set(mode='EDIT') 
     bpy.ops.mesh.select_more()
     bpy.ops.mesh.subdivide(ngon=False)
     bpy.ops.mesh.select_less()
     bpy.ops.mesh.select_less()
-    #bpy.ops.mesh.subdivide(ngon=False)
     bpy.ops.object.mode_set(mode='OBJECT')
+
+class MESH_OT_new_remove_basal(bpy.types.Operator): #!!!
+    """Remove the basal region using a threshold value."""
+    bl_idname = 'heart.remove_basal'
+    bl_label = 'Remove_basal_region'
+
+    def execute(self, context): 
+        obj = context.active_object
+        remove_basal_region(context, obj)
+        return{'FINISHED'} 
+
+def remove_basal_region(context, obj): #!!!
+    """Remove basal region of the ventricle using a threshold."""
+    bpy.ops.object.mode_set(mode='OBJECT') 
+    cons_print(f"Object: {obj.name}")
+    deselect_object_vertices(obj)
+    deleted_verts = []
+     # Find vertices to delete (above z-coordinate threshold)
+    bpy.ops.object.mode_set(mode='OBJECT') 
+    bm = bmesh.new()       
+    bm.from_mesh(obj.data)
+    bm.faces.ensure_lookup_table()
+    for v in bm.verts:
+        vertice_coords = obj.matrix_world @ v.co # Transfer to global coordinate system.
+        if vertice_coords[2] > 42: #!!!  fuer variable austauschen # Only vertices above threshold are selected to be deleted
+            v.select = True
+            deleted_verts.append(v.index)
+        else: v.select = False # maybe gar nicht noetig die line
+
+    bm.to_mesh(obj.data) # Transfer selection to object 
+    # Remove vertices below threshold (height-plane)
+    bpy.ops.object.mode_set(mode='EDIT') 
+    bpy.ops.mesh.delete_edgeloop()
+    bpy.ops.object.mode_set(mode='OBJECT')
+    
+    # Save top edge loop to be selected again later on
+    bm = bmesh.new()       
+    bm.from_mesh(obj.data)
+    bm.faces.ensure_lookup_table()
+    marked_verts = [v.index for v in bm.verts if v.select]
+    # Create vertex group for upper apical edge loop
+    vg_upper_apical = "upper_apical_edge_loop"
+    vg_orifice = obj.vertex_groups.new( name = vg_upper_apical)
+    vg_orifice.add(marked_verts, 1, 'ADD' )
+    # Remove remaining face create after delete_edgeloop()
+    bpy.ops.object.mode_set(mode='EDIT') 
+    bpy.ops.mesh.delete(type='FACE') 
+
+    # Select vertex group
+    bpy.ops.object.vertex_group_set_active(group=str(vg_upper_apical))
+    bpy.ops.object.vertex_group_select()
+    # Smooth highest edge loop of apical region
+    bpy.ops.mesh.looptools_relax(input='selected', interpolation='linear', iterations='5', regular=True) # Reduce spikes on the highest edge loop
+    bpy.ops.mesh.looptools_flatten(influence=100, lock_x=False, lock_y=False, lock_z=False, plane='best_fit', restriction='none') # Flatten highest edge loop onto a plane
+
+    subdivide_last_edge_loop()
+
+    bpy.ops.object.mode_set(mode='OBJECT')
+    bm = bmesh.new()       
+    bm.from_mesh(obj.data)
+    bm.faces.ensure_lookup_table()
+    marked_verts = [v.index for v in bm.verts if v.select]
+    # Re-initialize vertex group for lower basal edge loop
+    if vg_upper_apical is not None: obj.vertex_groups.remove(vg_orifice)
+    vg_upper_apical = "upper_apical_edge_loop"
+    vg_orifice = obj.vertex_groups.new( name = vg_upper_apical)
+    vg_orifice.add(marked_verts, 1, 'ADD' )
+
+    # Smooth apical region  in the region of the cut
+    #!!!
+    bpy.ops.mesh.select_more()
+    bpy.ops.mesh.select_more()
+
+
+    
+    
+    
+    return deleted_verts #!!! apply to other ventricles. currently only prototype
+    
+
 
 class MESH_OT_build_valve(bpy.types.Operator):
     """Create geometry for mitral or aortic valve"""
@@ -522,7 +601,7 @@ def create_valve_orifice(context, valve_mode): # Change to create orifice
 
     # Subdivide for the real mitral valve for a smoother transition
     if valve_mode == "Mitral" and context.scene.bool_porous: 
-        #!!!select more
+        #!!!select more #Smoother mesh transition
         bpy.ops.mesh.subdivide(number_cuts=1, ngon=False)
         # select less
         # subdivide
@@ -1468,7 +1547,7 @@ class MESH_OT_Quick_Recon(bpy.types.Operator):
         return{'FINISHED'} 
 
 class MESH_DEV_volumes(bpy.types.Operator):
-    """Development tool"""
+    """Compute volumes of selected objects."""
     bl_idname = 'heart.dev_volumes'
     bl_label = 'Return volumes of selected objects'
 
@@ -1494,7 +1573,7 @@ def dev_tool_volume(obj):
     return volume, area
 
 class MESH_DEV_indices(bpy.types.Operator):
-    """Development tool to print indices of selected vertices."""
+    """Print indices of selected vertices and print the total number of selected nodes."""
     bl_idname = 'heart.dev_indices'
     bl_label = 'Return selected vertices indices'
 
@@ -1538,15 +1617,15 @@ def dev_tool_z_coord(context, value):
     return True
 
 class MESH_DEV_edge_index(bpy.types.Operator):
-    """Development tool to print the index of an edge."""
+    """Print the index of one selected edge."""
     bl_idname = 'heart.dev_check_edges'
     bl_label = 'Print edge index between two selected indices'
 
     def execute(self, context):
-        check_edges()
+        check_edge()
         return{'FINISHED'}
 
-def check_edges():
+def check_edge():
     """Print edge index between two selected indices."""
     obj = bpy.context.edit_object
     me = obj.data
@@ -1734,6 +1813,8 @@ class PANEL_Poisson(bpy.types.Panel):
         row = layout.row()
         row.operator('heart.cut_edge_loops', text= "Remove edge loops from top position", icon = 'LIBRARY_DATA_OVERRIDE') 
         row = layout.row()
+        row.operator('heart.remove_basal', text= "Remove basal region", icon = 'LIBRARY_DATA_OVERRIDE') 
+        row = layout.row()
         layout.operator('heart.poisson', text= "Apply Poisson surface reconstruction", icon = 'PROP_ON')
         row = layout.row()
         layout.operator('heart.create_valve_orifice', text= "Create valve orifices", icon = 'ALIASED')
@@ -1798,7 +1879,7 @@ class PANEL_Reconstruction(bpy.types.Panel):
         layout.operator('heart.quick_recon', text= "Quick reconstruction", icon = 'HEART')
 
 class PANEL_Dev_tools(bpy.types.Panel):
-    bl_label = "Dev_tools"
+    bl_label = "Development tools"
     bl_idname = "PT_Dev_tools"
     bl_space_type = 'VIEW_3D'
     bl_region_type = 'UI'
@@ -1808,11 +1889,11 @@ class PANEL_Dev_tools(bpy.types.Panel):
     def draw(self, context):
         layout = self.layout
         row = layout.row()
-        layout.operator('heart.dev_volumes', text= "Get volumes", icon = 'HOME')
+        layout.operator('heart.dev_volumes', text= "Compute volumes", icon = 'HOME')
         row = layout.row()
-        layout.operator('heart.dev_indices', text= "Get vertex indices", icon = 'PLUS')
+        layout.operator('heart.dev_indices', text= "Get vertex indices", icon = 'THREE_DOTS')
         row = layout.row()
-        layout.operator('heart.dev_check_edges', text= "Get edge index", icon = 'PLUS')
+        layout.operator('heart.dev_check_edges', text= "Get edge index", icon = 'ARROW_LEFTRIGHT')
         row = layout.row()
         layout.operator('heart.dev_check_node_connectivity', text= "Node-connectivity check", icon = 'CHECKMARK')
         row = layout.row()
@@ -1821,7 +1902,7 @@ class PANEL_Dev_tools(bpy.types.Panel):
 classes = [
     PANEL_Position_Ventricle,
     PANEL_Interpolation, PANEL_Valves, PANEL_Poisson, PANEL_Objects, PANEL_Reconstruction, PANEL_Setup_Variables,  PANEL_Dev_tools, MESH_OT_get_node, MESH_OT_ventricle_rotate, MESH_OT_poisson, MESH_OT_build_valve, MESH_OT_create_valve_orifice, 
-    MESH_OT_support_struct, MESH_OT_connect_valves, MESH_OT_cut_edge_loops, MESH_OT_Add_Atrium, MESH_OT_Add_Aorta, MESH_OT_Porous_zones, MESH_OT_Quick_Recon, 
+    MESH_OT_support_struct, MESH_OT_connect_valves, MESH_OT_cut_edge_loops, MESH_OT_Add_Atrium, MESH_OT_Add_Aorta, MESH_OT_Porous_zones, MESH_OT_Quick_Recon, MESH_OT_new_remove_basal,
     MESH_OT_create_basal, MESH_OT_connect_apical_and_basal, MESH_OT_Ventricle_Interpolation, MESH_OT_Add_Vessels_Valves, MESH_DEV_volumes, MESH_DEV_indices, MESH_DEV_edge_index, MESH_DEV_check_node_connectivity,
 ]
   
