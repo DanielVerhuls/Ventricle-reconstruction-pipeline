@@ -869,7 +869,7 @@ def create_basal_region_for_object(context, reference_copy):
 
 def compute_height_plane(context):
     """Compute height of the plane used to cut off the apical region from the basal region of the reference geometry."""
-    if context.scene.min_valves <= context.scene.max_apical: # the apical region extends over the basal region
+    if context.scene.min_valves <= context.scene.max_apical: # The apical region extends over the basal region
         cons_print(f"Error: Valves ({context.scene.min_valves}) lie beneath the highest point of the ventricle({context.scene.max_apical}). Try a different setup for valve position or dissolve loops.")
         return False
     elif context.scene.min_valves < 1.025 * context.scene.max_apical: # Basal and apical region lie very close to one another. This could lead to large kinks in the geometry
@@ -888,61 +888,56 @@ def apply_voxel_remesh(voxel_size):
     bpy.ops.object.modifier_apply(modifier="Remesh")
 
 def merge_vertices(voxel_size):
-    """Merge vertices dependent on voxel size to eliminate vertices close to each other and thus reducing skewness in certain areas."""
+    """Merge all vertices dependent on voxel size to eliminate vertices close to each other and thus reducing skewness in certain areas."""
     bpy.ops.object.mode_set(mode='EDIT') 
-    # Select all vertices
     bpy.ops.mesh.select_all(action='SELECT')
     bpy.ops.mesh.remove_doubles(threshold=voxel_size / 2, use_sharp_edge_from_normals=False, use_unselected=True)
     bpy.ops.object.mode_set(mode='OBJECT')
 
 def remove_apical_region(context, obj):
     """Remove the apical ventricle region from the geometry to create solely the basal region used for all timeframes"""
+## Find vertices to delete.
     deselect_object_vertices(obj)
-    # Find vertices to delete (below z-coordinate threshold)
     bm = bmesh.new()       
     bm.from_mesh(obj.data)
     bm.faces.ensure_lookup_table()
     for v in bm.verts:
-        vertice_coords = obj.matrix_world @ v.co # Transfer to global coords
-        if vertice_coords[2] < context.scene.height_plane: v.select = True # only vertices below threshold (height-plane) shall be deleted
+        vertice_coords = obj.matrix_world @ v.co # Transfer to global coordinates.
+        if vertice_coords[2] < context.scene.height_plane: v.select = True # Only vertices below threshold (height-plane) shall be deleted.
         else:  v.select = False
-
     bm.to_mesh(obj.data) # Transfer selection to object 
-    # Remove vertices below threshold (height-plane)
+## Remove vertices.
     bpy.ops.object.mode_set(mode='EDIT') 
     bpy.ops.mesh.delete_edgeloop()
     bpy.ops.object.mode_set(mode='OBJECT')
-    
-    # Save bottom edge loop to be selected again later on
+# Save bottom edge loop to be selected again later on.
     bm = bmesh.new()       
     bm.from_mesh(obj.data)
     bm.faces.ensure_lookup_table()
-
-    marked_verts = [v.index for v in bm.verts if v.select]
-    # Create vertex group for lower basal edge loop
+    marked_verts = [v.index for v in bm.verts if v.select] # Saved selected vertices.
+    # Create vertex group for lower basal edge loop and add selected vertices to it.
     vg_lower_basal = "lower_basal_edge_loop"
     vg_orifice = obj.vertex_groups.new( name = vg_lower_basal)
     vg_orifice.add(marked_verts, 1, 'ADD' )
-    # Remove remaining face create after delete_edgeloop()
+## Remove remaining face create after delete_edgeloop()
     bpy.ops.object.mode_set(mode='EDIT') 
     bpy.ops.mesh.delete(type='FACE') 
     bpy.ops.object.mode_set(mode='OBJECT')
-    
-    # Select vertex group
+## Select vertex group
     bpy.ops.object.mode_set(mode='EDIT') 
     bpy.ops.object.vertex_group_set_active(group=str(vg_lower_basal))
     bpy.ops.object.vertex_group_select()
-    
+## Relax and flatten lower edge loop.   
     bpy.ops.mesh.looptools_relax(input='selected', interpolation='linear', iterations='1', regular=True) # Reduce spikes on the cutting edge loop
-    # !!!Flatten lower edge loop
     bpy.ops.mesh.looptools_flatten(influence=100, lock_x=False, lock_y=False, lock_z=False, plane='best_fit', restriction='none')
 
-def insert_valves_into_basal(context, poisson_basal):
+def insert_valves_into_basal(context, poisson_basal): #!!! verschlankung ab hier weiter
     """Insert valve geometry into geometry and connect it to orifice."""
-    connect_valve_orifice(context, "Aortic", 0) # Currently the same aortic valve is used for all approaches
+    connect_valve_orifice(context, "Aortic", 0) # Insert aortic valve disk into basal region.
     poisson_basal.select_set(False)
     basal_regions = []
-    if context.scene.bool_porous: # Porous mitral valve
+
+    if context.scene.bool_porous: # Porous mitral valve.
         # Copy basal region
         bpy.ops.object.mode_set(mode='OBJECT')
         curr_basal = copy_object(poisson_basal.name, f"basal_0")
@@ -951,8 +946,7 @@ def insert_valves_into_basal(context, poisson_basal):
         # Connect basal region to valve
         connect_valve_orifice(context, "Mitral", valve_index = 0) # Only one basal region necessary for porous medium
         basal_regions.append(curr_basal)
-    else:  # Real mitral valve
-
+    else:  # Interpolated mitral valve.
         ## Create reference basal region to get edges connections from
         bpy.ops.object.mode_set(mode='OBJECT')
         curr_basal = copy_object(poisson_basal.name, f"basal_ref")
@@ -976,7 +970,7 @@ def insert_valves_into_basal(context, poisson_basal):
             basal_regions.append(curr_basal)
     return basal_regions
 
-def connect_valve_orifice_reference(context, valve_mode, valve_index):
+def connect_valve_orifice_reference(context, valve_mode, valve_index): # !!! ist diese funktion nötig -> gibt auch connect_valve_orifice
     """Connect orifices around valves with surrounding mesh nodes."""
     obj = bpy.context.active_object
     # Create exact valve nodes
@@ -1401,7 +1395,6 @@ class MESH_OT_Quick_Recon(bpy.types.Operator):
     """Quick geometrical reconstruction of all ventricles"""
     bl_idname = 'heart.quick_recon'
     bl_label = 'Reconstruct all selected ventricles'
-
     def execute(self, context):
         # Interpolate ventricle geometry
         if not interpolate_ventricle(context): return{'CANCELLED'}
@@ -1411,7 +1404,6 @@ class MESH_OT_Quick_Recon(bpy.types.Operator):
         if not mesh_connect_apical_and_basal(context): return {'CANCELLED'}
         # Add surrounding objects
         add_vessels_and_valves(context)
-
         # Delete basal regions (Cleanup) !!! Activate later
         #bpy.data.objects.remove(bpy.data.objects[copied_reference.name], do_unlink=True)
         #bpy.data.objects.remove(bpy.data.objects[basal_region.name], do_unlink=True)
@@ -1491,29 +1483,25 @@ class MESH_DEV_edge_index(bpy.types.Operator):
     """Print the index of one selected edge."""
     bl_idname = 'heart.dev_check_edges'
     bl_label = 'Print edge index between two selected indices'
-
     def execute(self, context):
-        check_edge()
+        if not check_edge(context): return{'CANCELLED'}
         return{'FINISHED'}
 
-def check_edge():
+def check_edge(context): #!!! Verschlankung bis hier
     """Print edge index between two selected indices."""
-    obj = bpy.context.edit_object
+## Read selected vertices
+    obj = context.edit_object
     me = obj.data
     bm = bmesh.from_edit_mesh(me)
-
     if hasattr(bm.verts, "ensure_lookup_table"): bm.verts.ensure_lookup_table()
-
-    verts = []
-    for v in bm.verts:
-        if v.select:
-            verts.append(v)
+    verts = [v for v in bm.verts if v.select] # Get selected vertices.
+## Only two vertices may be selected.
     if len(verts) != 2:
         cons_print(f"Select exactly 2 vertices")
         return False
-    V1 = verts[0]
+## Check edge connectivity between vertices and print out result.
+    V1 = verts[0] # Define vertices one and two.
     V2 = verts[1]
-
     for e in V1.link_edges: 
         if e.other_vert(V1) is V2:
             cons_print(f"Vertex indices : {V1.index}, {V2.index} with edge index: {e.index}")
@@ -1525,26 +1513,23 @@ class MESH_DEV_check_node_connectivity(bpy.types.Operator):
     """Development tool to check node-connectivity between all selected objects."""
     bl_idname = 'heart.dev_check_node_connectivity'
     bl_label = 'Check all selected edges between two objects'
-
     def execute(self, context):
         check_node_connectivity(context)
         return{'FINISHED'}
 
 def check_node_connectivity(context):
-    """Check node connectivity between all selected objects."""
-    verts = []
-    edges = []
-    faces = []
+    """Check node-connectivity between all selected objects."""
+    vertices, edges, faces = ([] for i in range(3))
     for i, obj in enumerate(context.selected_objects):
-        # Initialize the list of vertices, edges and faces each with their respective connecting vertices.
+    ## Initialize the list of vertices, edges and faces each with their respective connecting vertices.
         if i == 0:
-            for v in obj.data.vertices: verts.append(v.index)
+            for v in obj.data.vertices: vertices.append(v.index)
             for e in obj.data.edges: edges.append([e.index, e.vertices[0] , e.vertices[1]])
             for f in obj.data.polygons: faces.append([f.index, f.vertices[0], f.vertices[1], f.vertices[2]])
         else:
-        # Checks for the length of vertices, edges and faces.
+    ## Checks for the length of vertices, edges and faces.
             # Check if the amount of vertices matches.
-            if len(obj.data.vertices) != len(verts):
+            if len(obj.data.vertices) != len(vertices):
                 cons_print(f"Object: {obj.name} has mismatching amount of vertices.")
                 return False
             # Check if the amount of edges matches.
@@ -1555,7 +1540,7 @@ def check_node_connectivity(context):
             if len(obj.data.polygons) != len(faces):
                 cons_print(f"Object: {obj.name} has mismatching amount of faces.")
                 return False
-        #Connectivity checks.    
+    ## Connectivity checks.    
             # Faces-connectivity check.
             for counter, f in enumerate(obj.data.polygons):
                 if not (faces[counter][0] == f.index and faces[counter][1]== f.vertices[0] and faces[counter][2] ==  f.vertices[1] and faces[counter][3] ==  f.vertices[2]):
@@ -1592,7 +1577,6 @@ class PANEL_Position_Ventricle(bpy.types.Panel):
     bl_region_type = 'UI'
     bl_category = 'Herz'
     bl_option = {'DEFALUT_CLOSED'}
-
     def draw(self, context):
         layout = self.layout 
         row = layout.row()
@@ -1610,7 +1594,6 @@ class PANEL_Position_Ventricle(bpy.types.Panel):
         row = layout.row()
         props = layout.operator('heart.get_point', text= "Select node at septum")
         props.point_mode = "Septum"  
-
         row = layout.row()
         row.label(text= "Rotation and cutting") 
         row = layout.row()
@@ -1623,7 +1606,6 @@ class PANEL_Interpolation(bpy.types.Panel):
     bl_region_type = 'UI'
     bl_category = 'Herz'
     bl_option = {'DEFALUT_CLOSED'}
-    
     def draw(self, context):
         layout = self.layout
         row = layout.row()
@@ -1640,7 +1622,6 @@ class PANEL_Valves(bpy.types.Panel):
     bl_region_type = 'UI'
     bl_category = 'Herz'
     bl_option = {'DEFALUT_CLOSED'}
-    
     def draw(self, context):
         layout = self.layout
 
@@ -1678,7 +1659,6 @@ class PANEL_Poisson(bpy.types.Panel):
     bl_region_type = 'UI'
     bl_category = 'Herz'
     bl_option = {'DEFALUT_CLOSED'}
-    
     def draw(self, context):
         layout = self.layout      
         row = layout.row()
@@ -1699,7 +1679,6 @@ class PANEL_Setup_Variables(bpy.types.Panel):
     bl_region_type = 'UI'
     bl_category = 'Herz'
     bl_option = {'DEFALUT_CLOSED'}
-    
     def draw(self, context):
         layout = self.layout
         row = layout.row()
@@ -1716,7 +1695,6 @@ class PANEL_Objects(bpy.types.Panel):
     bl_region_type = 'UI'
     bl_category = 'Herz'
     bl_option = {'DEFALUT_CLOSED'}
-    
     def draw(self, context):
         layout = self.layout
         row = layout.row()
@@ -1733,7 +1711,6 @@ class PANEL_Reconstruction(bpy.types.Panel):
     bl_region_type = 'UI'
     bl_category = 'Herz'
     bl_option = {'DEFALUT_CLOSED'}
-    
     def draw(self, context):
         layout = self.layout
         row = layout.row()
@@ -1756,7 +1733,6 @@ class PANEL_Dev_tools(bpy.types.Panel):
     bl_region_type = 'UI'
     bl_category = 'Herz'
     bl_option = {'DEFALUT_CLOSED'}
-    
     def draw(self, context):
         layout = self.layout
         row = layout.row()
@@ -1768,7 +1744,6 @@ class PANEL_Dev_tools(bpy.types.Panel):
         row = layout.row()
         layout.operator('heart.dev_check_node_connectivity', text= "Node-connectivity check", icon = 'CHECKMARK')
         row = layout.row()
-
 
 classes = [
     PANEL_Position_Ventricle,
@@ -1782,36 +1757,29 @@ def register():
     bpy.types.Scene.pos_top = bpy.props.FloatVectorProperty(name="Top position", default = (0,0,1))
     bpy.types.Scene.pos_bot = bpy.props.FloatVectorProperty(name="Top position", default = (0,0,0))
     bpy.types.Scene.pos_septum = bpy.props.FloatVectorProperty(name="Top position", default = (0,1,0))
-
     bpy.types.Scene.top_index = bpy.props.IntProperty(name="Index of top position", default = 0)
     bpy.types.Scene.reference_index = bpy.props.IntProperty(name="Index of reference object in selected objects", default = 0)
-
     # Cutting plane variables
     bpy.types.Scene.height_plane = bpy.props.FloatProperty(name="Height(z-value) of intersection plane", default=40,  min = 0.01)
     bpy.types.Scene.min_valves = bpy.props.FloatProperty(name="Minimal z-value of valves", default=45)
     bpy.types.Scene.max_apical = bpy.props.FloatProperty(name="Maximal z-value of apical region after cutting", default=40)
     bpy.types.Scene.amount_of_cuts = bpy.props.IntProperty(name="Amount of edge loop cuts from top position", default=10,  min = 2)
-
     # Possion algorithm 
     bpy.types.Scene.poisson_depth = bpy.props.IntProperty(name="Depth of possion algorithm", default=10,  min = 1)
-
     # Aortic valve
     bpy.types.Scene.aortic_radius = bpy.props.FloatProperty(name="aortic_radius", default=2,  min = 0.01)
     bpy.types.Scene.translation_aortic = bpy.props.FloatVectorProperty(name="Aortic valve translation", default = (0,0,1))
     bpy.types.Scene.angle_aortic = bpy.props.FloatVectorProperty(name="Aortic valve rotation", default = (0,0,0))
-    
     # Mitral valve
     bpy.types.Scene.mitral_radius_long = bpy.props.FloatProperty(name="mitral_radius_long", default=6,  min = 0.01)
     bpy.types.Scene.mitral_radius_small = bpy.props.FloatProperty(name="mitral_radius_small", default=3,  min = 0.01)
     bpy.types.Scene.translation_mitral = bpy.props.FloatVectorProperty(name="Aortic valve translation", default = (0,0,1))
     bpy.types.Scene.angle_mitral = bpy.props.FloatVectorProperty(name="Aortic valve rotation", default = (0,0,0))
-
     bpy.types.Scene.bool_porous = bpy.props.BoolProperty(name="Porous approach for mitral valve?", default = False)
     # Interpolation variables
     bpy.types.Scene.time_rr = bpy.props.FloatProperty(name="Time RR-duration", default=0.6,  min = 0.01)
     bpy.types.Scene.time_diastole = bpy.props.FloatProperty(name="Time diastole", default=0.35,  min = 0.01)
     bpy.types.Scene.frames_ventricle = bpy.props.IntProperty(name="Amount of frames ventricle after interpolation", default=10,  min = 10)
-
     # Connection variable
     bpy.types.Scene.connection_twist = bpy.props.IntProperty(name="Twist for bridging algorithm in connection.", default=0)
     # Register classes
@@ -1824,5 +1792,4 @@ def unregister():
         bpy.utils.unregister_class(c)
     
 if __name__ == '__main__':
-    register()
-    
+    register()  
