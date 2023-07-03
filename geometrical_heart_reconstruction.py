@@ -16,13 +16,11 @@ import math
 import mathutils 
 import numpy as np
 import open3d as o3d
-import time
-
 scene = bpy.types.Scene
 
-# Generally used functions
+# Generally used functions.
 def cons_print(data):
-    """Print to console for button presses. Used for error messages"""
+    """Print to console for button presses. Used for error messages, information outputs and warnings."""
     for window in bpy.context.window_manager.windows:
         screen = window.screen
         for area in screen.areas:
@@ -31,7 +29,7 @@ def cons_print(data):
                 bpy.ops.console.scrollback_append(override, text=str(data), type="OUTPUT")   
 
 def copy_object(input_name, output_name):
-    """Copy object with given name"""
+    """Copy object with given name."""
     src_obj = bpy.data.objects[input_name]
     new_obj = src_obj.copy()
     new_obj.data = src_obj.data.copy()
@@ -42,25 +40,24 @@ def copy_object(input_name, output_name):
     return new_obj
 
 def deselect_object_vertices(obj):
-    """Go into edit mode and deselect all vertices of an object"""
-    # Transfer data into edit mode
+    """Go into edit mode and deselect all vertices of an object."""
+    # Transfer data into edit mode.
     me = obj.data
     bpy.ops.object.mode_set(mode='EDIT') 
     bm = bmesh.from_edit_mesh(me)
-    # Change to vert mode and deselect all vertices
+    # Change to vert mode and deselect all vertices.
     bm.select_mode = {'VERT'}
     for v in bm.verts: v.select = False
-    # Return to object mode
+    # Return to object mode and update the mesh to the obeject.
     bm.select_flush_mode()   
     me.update()
     bpy.ops.object.mode_set(mode='OBJECT') 
 
 class MESH_OT_get_node(bpy.types.Operator):
-    """Get node position coordinates and create new according new point"""
+    """Get node position coordinates and save coordinates in UI."""
     bl_idname = 'heart.get_point'
     bl_label = 'Get node position' 
-    # Prop definition
-    point_mode: bpy.props.StringProperty(name = "point_mode", description="Which point to select", default = "Top")
+    point_mode: bpy.props.StringProperty(name = "point_mode", description="Which point to select", default = "Top") # Which point is selected with this function(Top/basal, bottom/apical, septum)
     
     def execute(self, context):
         obj = context.object
@@ -68,7 +65,6 @@ class MESH_OT_get_node(bpy.types.Operator):
         if obj.mode != 'EDIT': 
             cons_print('This process only works in edit mode')
             return{'CANCELLED'} 
-
         # Get vector-coordinates
         bm = bmesh.from_edit_mesh(obj.data)
         counter = 0
@@ -81,15 +77,12 @@ class MESH_OT_get_node(bpy.types.Operator):
         if counter !=1:
             cons_print('Incorrect amount of nodes. Only one node may be selected')
             return{'CANCELLED'}  
-
         # Using temporary veriables prevents the change of the global variable, when to many nodes are selected.
         if self.point_mode == "Top":  
             context.scene.pos_top = vertice_coords
             context.scene.top_index = index # Update index of the top position
-        elif self.point_mode == "Bot":
-            context.scene.pos_bot = vertice_coords
-        elif self.point_mode == "Septum":
-            context.scene.pos_septum = vertice_coords
+        elif self.point_mode == "Bot": context.scene.pos_bot = vertice_coords
+        elif self.point_mode == "Septum": context.scene.pos_septum = vertice_coords
         else:
             cons_print('Unsupported point mode input. Only Top, Bot and Septum available')
             return{'CANCELLED'}    
@@ -104,86 +97,69 @@ class MESH_OT_ventricle_rotate(bpy.types.Operator):
         if not rotate_ventricle(context): return{'CANCELLED'}
         return{'FINISHED'}
 
-def get_rotation_angle(numerator, denominator):
-    """Function to quickly compute the rotation angle."""
-    angle = 0
-    if denominator > 0:
-        angle = math.atan(numerator/denominator)
-    elif denominator < 0:
-        if numerator > 0:
-            angle = math.pi + math.atan(numerator/denominator)
-        elif numerator < 0:
-            angle = - math.pi + math.atan(numerator/denominator)
-    else:
-        if numerator > 0:
-            angle = math.pi    
-        elif numerator < 0:
-            angle = - math.pi 
-    return angle
-
 def rotate_ventricle(context):
-    """Rotate ventricle geometry using 3 points"""
-# Only works in object mode
+    """Rotate ventricle geometry using 3 points."""
+## Coniditions to terminate the code.
+    # Only works in object mode!!!
     if bpy.context.mode != 'OBJECT':
         cons_print("Go into object mode")
         return False
-# Only works if and object is selected
+    # Only works if and object is selected
     if len(bpy.context.selected_objects) < 1:
         cons_print("No object selected")
         return False
-
-# Initialize points
+## Precompute the rotation angles using the relative positions between top, bottom and septum node.
+    # Initialize points
     top = mathutils.Vector((context.scene.pos_top[0], context.scene.pos_top[1], context.scene.pos_top[2]))
     bottom = mathutils.Vector((context.scene.pos_bot[0], context.scene.pos_bot[1], context.scene.pos_bot[2]))
     septum = mathutils.Vector((context.scene.pos_septum[0], context.scene.pos_septum[1], context.scene.pos_septum[2]))
-    # Compute difference between Top and Bottom
-    vec_difference = np.array([top.x - bottom.x, top.y - bottom.y, top.z - bottom.z])
-
-# First rotation precomputing
-    # X - angle computation
-    angle_x = get_rotation_angle(vec_difference[1], vec_difference[2])                 
-                
-    # Compute rotated top and curvature point using rotation matrix around x-axis
-    rot_matrix = np.array([[1, 0, 0], [0, math.cos(angle_x), -math.sin(angle_x)], [0, math.sin(angle_x), math.cos(angle_x)]])  
-    rot_top = rot_matrix.dot(vec_difference)
-    rot_septum = rot_matrix.dot(septum-bottom)
-
-# Second rotation precomputing
-    # Y -angle computation and turn the rotation direction with a minus sign
-    angle_y = - get_rotation_angle(rot_top[0], rot_top[2])
-    
-    # Compute second rotation of curvature point using rotation matrix around y-axis
+    vec_difference = np.array([top.x - bottom.x, top.y - bottom.y, top.z - bottom.z]) # Compute difference between Top and Bottom to compute the angle for the first rotation.
+    # First rotation precomputation - X
+    angle_x = get_rotation_angle(vec_difference[1], vec_difference[2]) # Get angle    
+    # Compute rotated top and septum node using rotation matrix around x-axis.
+    rot_matrix = np.array([[1, 0, 0], [0, math.cos(angle_x), -math.sin(angle_x)], [0, math.sin(angle_x), math.cos(angle_x)]]) 
+    rot_top = rot_matrix.dot(vec_difference) 
+    rot_septum = rot_matrix.dot(septum-bottom) 
+    # Second rotation precomputation - Y
+    angle_y = - get_rotation_angle(rot_top[0], rot_top[2]) # Get angle. Turn the rotation direction with a minus sign
+    # Compute second rotation of septum node using rotation matrix around y-axis.
     rot_matrix_two = np.array([[math.cos(angle_y), 0, math.sin(angle_y)], [0, 1, 0], [-math.sin(angle_y), 0, math.cos(angle_y)]]) 
-    double_rot_septum = rot_matrix_two.dot(rot_septum)
     double_rot_top = rot_matrix_two.dot(rot_top)
-    # Update UI top-variables
-    context.scene.pos_top = (round(abs(double_rot_top[0]), 6), round(abs(double_rot_top[1]), 6), round(abs(double_rot_top[2]), 6))
-    
-# Third rotation precomputing
-    # Z - angle computation
-    angle_z = get_rotation_angle(double_rot_septum[0], double_rot_septum[1])
+    double_rot_septum = rot_matrix_two.dot(rot_septum)
+    context.scene.pos_top = (round(abs(double_rot_top[0]), 6), round(abs(double_rot_top[1]), 6), round(abs(double_rot_top[2]), 6)) # Update UI top-variables
+    # Third rotation precomputation - Z
+    angle_z = get_rotation_angle(double_rot_septum[0], double_rot_septum[1]) # Get angle
+    # Compute third rotation of septum node using rotation matrix around y-axis.
     rot_matrix_three = np.array([[math.cos(angle_z), -math.sin(angle_z), 0], [math.sin(angle_z), math.cos(angle_z), 0], [0, 0, 1]]) 
     third_rot_septum = rot_matrix_three.dot(double_rot_septum)
-    # Update UI septum-variables
-    context.scene.pos_septum = (round(abs(third_rot_septum[0]), 6), round(abs(third_rot_septum[1]), 6), round(abs(third_rot_septum[2]), 6))
-
-# Translation and rotation-process for all selected objects
+    context.scene.pos_septum = (round(abs(third_rot_septum[0]), 6), round(abs(third_rot_septum[1]), 6), round(abs(third_rot_septum[2]), 6)) # Update UI septum-variables
+## Translation and rotation-process for all selected objects
     # Translation
     if context.scene.pos_bot != (0, 0, 0):   
-        # Translate Coordinate system to (0,0,0) by subtracting the bottom point for easier rotation
+        # Translate Coordinate system to (0,0,0) by subtracting the bottom node for easier rotation
         bpy.ops.transform.translate(value=(-bottom), orient_axis_ortho='X', orient_type='GLOBAL', orient_matrix=((1, 0, 0), (0, 1, 0), (0, 0, 1)), orient_matrix_type='GLOBAL', constraint_axis=(False, False, True), mirror=False, use_proportional_edit=False, proportional_edit_falloff='SMOOTH', proportional_size=1, use_proportional_connected=False, use_proportional_projected=False, release_confirm=True)
         bpy.ops.object.transform_apply(location=True, scale=False, rotation=False)
         # Update UI bottom-variables
         context.scene.pos_bot = (0, 0, 0)
-
     # Rotation operations around x-, y- and z-axis. 
     bpy.ops.transform.rotate(value=angle_x, orient_axis='X', orient_type='GLOBAL', orient_matrix=((1, 0, 0), (0, 1, 0), (0, 0, 1)), orient_matrix_type='GLOBAL', constraint_axis=(True, False, False), mirror=False, use_proportional_edit=False, proportional_edit_falloff='SMOOTH', proportional_size=1, use_proportional_connected=False, use_proportional_projected=False, release_confirm=True)
     bpy.ops.transform.rotate(value=angle_y, orient_axis='Y', orient_type='GLOBAL', orient_matrix=((1, 0, 0), (0, 1, 0), (0, 0, 1)), orient_matrix_type='GLOBAL', constraint_axis=(False, True, False), mirror=False, use_proportional_edit=False, proportional_edit_falloff='SMOOTH', proportional_size=1, use_proportional_connected=False, use_proportional_projected=False, release_confirm=True)
     bpy.ops.transform.rotate(value=angle_z, orient_axis='Z', orient_type='GLOBAL', orient_matrix=((1, 0, 0), (0, 1, 0), (0, 0, 1)), orient_matrix_type='GLOBAL', constraint_axis=(False, False, True), mirror=False, use_proportional_edit=False, proportional_edit_falloff='SMOOTH', proportional_size=1, use_proportional_connected=False, use_proportional_projected=False, release_confirm=True)
-
     # Apply all transformations
     bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)
     return True
+
+def get_rotation_angle(numerator, denominator):
+    """Function to quickly and reliably compute the rotation angle. Python tan-functions did not give the correct angles for some cases."""
+    angle = 0
+    if denominator > 0: angle = math.atan(numerator/denominator)
+    elif denominator < 0:
+        if numerator > 0: angle = math.pi + math.atan(numerator/denominator)
+        elif numerator < 0: angle = - math.pi + math.atan(numerator/denominator)
+    else:
+        if numerator > 0: angle = math.pi    
+        elif numerator < 0: angle = - math.pi 
+    return angle
 
 class MESH_OT_cut_edge_loops(bpy.types.Operator):
     """Remove the upper loops of the ventricle from the pre-selected top position"""
@@ -780,7 +756,6 @@ def create_porous_valve_zones(context, valve_mode, valve_strings):
         new_obj = copy_object(obj_str, f"p_{obj_str}")
         new_obj.select_set(True)
         bpy.context.view_layer.objects.active = new_obj
-        # Modify the copied object to fit in the correct place
         scale_rotate_translate_object(context, new_obj, valve_mode = valve_mode, ratio = 1)
 
 class MESH_OT_create_basal(bpy.types.Operator):
