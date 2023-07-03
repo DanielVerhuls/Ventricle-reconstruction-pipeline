@@ -806,21 +806,6 @@ def find_prototype_ventricle(objects): #!!! very inefficient currently
         # Compute volume and append it to the volume list
         volume = bm.calc_volume(signed=True)
         volumes.append(volume)
-    """
-    # Use ventricle closest to mean volume
-    smallest_diff = max(volumes)
-    mean = sum(volumes) / len(volumes) # Compute mean volume of objects
-    for counter, obj in enumerate(objects):  
-        # Transfer object into mesh
-        bm = bmesh.new()       
-        bm.from_mesh(obj.data)
-        bm.faces.ensure_lookup_table()
-        volume = bm.calc_volume(signed=True) # Compute volume 
-        current_diff = abs(volume - mean)
-        # Prototype is object with volume closest to mean volume
-        if current_diff < smallest_diff:
-            smallest_diff = current_diff   
-            bpy.types.Scene.prototype_index = counter"""
 ## Find ventricle with maximum volume
     max = 0
     for counter, vol in enumerate(volumes):
