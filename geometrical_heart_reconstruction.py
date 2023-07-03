@@ -301,12 +301,12 @@ def remove_basal_region(context, obj): #!!!
     bm = bmesh.new()       
     bm.from_mesh(obj.data)
     bm.faces.ensure_lookup_table()
+    z_cutoff_plane = 30 #!!! context variable draus machen
     for v in bm.verts:
         vertice_coords = obj.matrix_world @ v.co # Transfer to global coordinate system.
-        if vertice_coords[2] > 42: #!!!  fuer variable austauschen # Only vertices above threshold are selected to be deleted
+        if vertice_coords[2] > z_cutoff_plane: # Only vertices above threshold are selected to be deleted
             v.select = True
             deleted_verts.append(v.index)
-        else: v.select = False # maybe gar nicht noetig die line
 
     bm.to_mesh(obj.data) # Transfer selection to object 
     # Remove vertices below threshold (height-plane)
@@ -336,26 +336,50 @@ def remove_basal_region(context, obj): #!!!
 
     subdivide_last_edge_loop()
 
+    
+    # Re-initialize vertex group for lower basal edge loop
     bpy.ops.object.mode_set(mode='OBJECT')
     bm = bmesh.new()       
     bm.from_mesh(obj.data)
     bm.faces.ensure_lookup_table()
-    marked_verts = [v.index for v in bm.verts if v.select]
-    # Re-initialize vertex group for lower basal edge loop
+    marked_verts = [v.index for v in bm.verts if v.select] # Re-read marked vertices.
     if vg_upper_apical is not None: obj.vertex_groups.remove(vg_orifice)
-    vg_upper_apical = "upper_apical_edge_loop"
     vg_orifice = obj.vertex_groups.new( name = vg_upper_apical)
     vg_orifice.add(marked_verts, 1, 'ADD' )
 
     # Smooth apical region  in the region of the cut
-    #!!!
-    bpy.ops.mesh.select_more()
-    bpy.ops.mesh.select_more()
+    bpy.ops.object.mode_set(mode='EDIT')
+    bpy.ops.object.vertex_group_set_active(group=str(vg_upper_apical))
+
+    deselect_object_vertices(obj)
+    deleted_verts = []
+     # Find vertices to select initially for smoothing
+    bpy.ops.object.mode_set(mode='OBJECT') 
+    bm = bmesh.new()       
+    bm.from_mesh(obj.data)
+    bm.faces.ensure_lookup_table()
+    for v in bm.verts:
+        vertice_coords = obj.matrix_world @ v.co 
+        if vertice_coords[2] > 9 / 10 * z_cutoff_plane: v.select = True
+    bm.to_mesh(obj.data) # Transfer selection to object 
+    bpy.ops.object.mode_set(mode='EDIT') 
+    # First hard smoothing operation
+    bpy.ops.object.vertex_group_deselect()
+    bpy.ops.mesh.vertices_smooth(factor=0.4, repeat=10)
+    n_smooth_iter = 3
+    for i in range(n_smooth_iter): # Continuously weaker smoothing operations with more nodes to create a smooth transition between smoothed and unsmoothed region.
+        bpy.ops.mesh.select_more()
+        bpy.ops.object.vertex_group_deselect()
+        bpy.ops.mesh.vertices_smooth(factor=0.4, repeat=3-i)
+
+    
+    #deselect_object_vertices(obj)
+    #bpy.ops.object.vertex_group_select()
+    
+
+    bpy.ops.object.mode_set(mode='OBJECT')
 
 
-    
-    
-    
     return deleted_verts #!!! apply to other ventricles. currently only prototype
     
 
