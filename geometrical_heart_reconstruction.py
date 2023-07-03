@@ -474,18 +474,17 @@ def create_poisson_from_object_pointcloud(context, obj):
     # Create Point cloud object and fill it with points
     point_cloud_data = o3d.geometry.PointCloud()
     point_cloud_data.points = o3d.utility.Vector3dVector(object_vertices)
-    # Prepare point cloud for poisson surface reconstruction. It needs the normals of the points in the pointcloud
+    # Prepare point cloud for poisson surface reconstruction. It needs the normals of the points in the point cloud
     point_cloud_data.estimate_normals()
     point_cloud_data.normalize_normals()
     point_cloud_data.orient_normals_consistent_tangent_plane(20)
     # Apply poisson surface reconstruction
     poisson_mesh, poisson_dens = o3d.geometry.TriangleMesh.create_from_point_cloud_poisson(point_cloud_data, depth = context.scene.poisson_depth, width=0, scale=1.1, linear_fit=False, n_threads= 1)
-    # Initialize empty arrays for object data
+    # Initialize empty arrays for object data and assign faces vertices and edges
     vertices, edges, faces = ([] for i in range(3))
-    # Assign faces vertices and edges
     vertices = poisson_mesh.vertices
     faces = poisson_mesh.triangles
-    # Create object from vertices, edges and faces in blender
+    # Create object from vertices, edges and faces in Blender
     emptyMesh = bpy.data.meshes.new('emptyMesh')
     emptyMesh.from_pydata(vertices, edges, faces)
     emptyMesh.update()
@@ -496,11 +495,10 @@ def create_poisson_from_object_pointcloud(context, obj):
     poisson_obj.select_set(True)
     bpy.context.view_layer.objects.active = poisson_obj
     obj.hide_set(True)
-    
     return poisson_obj
 
 class MESH_OT_create_valve_orifice(bpy.types.Operator):
-    """Create valve orifice for the later insertion of the valve interface nodes."""
+    """Create nodes in valve orifice regions for the later insertion of the valve interface nodes."""
     bl_idname = 'heart.create_valve_orifice'
     bl_label = 'Dissolve vertices blocking the valve entries into a single face, delete this face and create a vertex group for all vertices around that face'
 
@@ -754,7 +752,7 @@ def create_porous_valve_zones(context, valve_mode, valve_strings):
         scale_rotate_translate_object(context, new_obj, valve_mode = valve_mode, ratio = 1)
 
 class MESH_OT_create_basal(bpy.types.Operator):
-    """Create basal region of ventricle"""
+    """Create basal region of ventricle using the position and angles of the heart valves."""
     bl_idname = 'heart.create_basal'
     bl_label = 'Reconstruct all selected ventricles'
 
@@ -763,33 +761,29 @@ class MESH_OT_create_basal(bpy.types.Operator):
         return{'FINISHED'} 
     
 def mesh_create_basal(context):
-    """Function of button create basal"""
+    """Create basal region."""
     cons_print("Create basal regions for selected ventricles...")
+## Error-cases and initialization of reference object.
     if not context.selected_objects:
         cons_print("No elements selected")
         return False
-
     selected_objects = context.selected_objects
-
-    # Find object with mean volume and create a copy of it to create the general basal region from
+    # Find object with mean volume and create a copy of it as a reference object to create the reference basal region from
     find_prototype_ventricle(selected_objects)
     prototype_ventricle_name = 'basal_region'
-
     prototype = selected_objects[bpy.types.Scene.prototype_index].name
     copied_prototype = copy_object(prototype, prototype_ventricle_name)
-        
     # Deselect objects
     copied_prototype.select_set(False)
     for obj in selected_objects: obj.select_set(False)
-
+## Operations to create basal region of the ventricle containing valve orifices
     # Find the largest z-value in all dissolved ventricle geometries
     find_max_value_after_dissolve(context, selected_objects)
-
-    # Operations to create basal region of the ventricle containing valve orifices
+    # Create basal region
     basal_regions = create_basal_region_for_object(context, copied_prototype)
     if not basal_regions: return False # If an error ocurred during creation of basal region, dont continue
-    
-    # Reselect objects before operation and deselect (and hide for performance) created objects
+## Cleanup
+    # Reselect objects to state previous to this operation and deselect (and hide for performance) created objects
     for obj in selected_objects: obj.select_set(True)
     for basal in basal_regions: 
         basal.select_set(False)
@@ -802,10 +796,8 @@ def mesh_create_basal(context):
 
 def find_prototype_ventricle(objects): #!!! very inefficient currently
     """Find prototype object with volume closest to mean volume."""
-    # Initialize variables
-    smallest_diff = 1000000
-    volumes = []
     # Create list of volumes
+    volumes = []
     for obj in objects:  
         # Transfer object into mesh
         bm = bmesh.new()       
@@ -816,28 +808,25 @@ def find_prototype_ventricle(objects): #!!! very inefficient currently
         volumes.append(volume)
     """
     # Use ventricle closest to mean volume
+    smallest_diff = max(volumes)
     mean = sum(volumes) / len(volumes) # Compute mean volume of objects
     for counter, obj in enumerate(objects):  
         # Transfer object into mesh
         bm = bmesh.new()       
         bm.from_mesh(obj.data)
         bm.faces.ensure_lookup_table()
-    
         volume = bm.calc_volume(signed=True) # Compute volume 
-
         current_diff = abs(volume - mean)
         # Prototype is object with volume closest to mean volume
         if current_diff < smallest_diff:
             smallest_diff = current_diff   
             bpy.types.Scene.prototype_index = counter"""
-
-    # Use max volume ventricle for reference #!!! prototype choice
+## Find ventricle with maximum volume
     max = 0
     for counter, vol in enumerate(volumes):
         if vol > max:
             max = vol
             bpy.types.Scene.prototype_index = counter
-
     return bpy.types.Scene.prototype_index
 
 def find_max_value_after_dissolve(context, objects): 
