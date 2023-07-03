@@ -346,7 +346,7 @@ def remove_basal_region(context, obj): #!!!
     bpy.ops.object.mode_set(mode='OBJECT')
 
 
-    return deleted_verts #!!! apply to other ventricles. currently only prototype
+    return deleted_verts #!!! apply to other ventricles. currently only reference, to do fuer die anderen ventricle
     
 
 
@@ -764,18 +764,18 @@ def mesh_create_basal(context):
         return False
     selected_objects = context.selected_objects
     # Find object with mean volume and create a copy of it as a reference object to create the reference basal region from
-    find_prototype_ventricle(selected_objects)
-    prototype_ventricle_name = 'basal_region'
-    prototype = selected_objects[bpy.types.Scene.prototype_index].name
-    copied_prototype = copy_object(prototype, prototype_ventricle_name)
+    find_reference_ventricle(selected_objects)
+    reference_ventricle_name = 'basal_region'
+    reference = selected_objects[bpy.types.Scene.reference_index].name
+    reference_copy = copy_object(reference, reference_ventricle_name)
     # Deselect objects
-    copied_prototype.select_set(False)
+    reference_copy.select_set(False)
     for obj in selected_objects: obj.select_set(False)
 ## Operations to create basal region of the ventricle containing valve orifices
     # Find the largest z-value in all dissolved ventricle geometries
     find_max_value_after_dissolve(context, selected_objects)
     # Create basal region
-    basal_regions = create_basal_region_for_object(context, copied_prototype)
+    basal_regions = create_basal_region_for_object(context, reference_copy)
     if not basal_regions: return False # If an error ocurred during creation of basal region, dont continue
 ## Cleanup
     # Reselect objects to state previous to this operation and deselect (and hide for performance) created objects
@@ -789,8 +789,8 @@ def mesh_create_basal(context):
     bpy.data.objects.remove(bpy.data.objects["basal_region_poisson"], do_unlink=True)
     return basal_regions
 
-def find_prototype_ventricle(objects): 
-    """Find prototype object with volume closest to mean volume."""
+def find_reference_ventricle(objects): 
+    """Find reference object with volume closest to mean volume."""
     # Create list of volumes
     volumes = []
     for obj in objects:  
@@ -805,9 +805,9 @@ def find_prototype_ventricle(objects):
     max = 0
     for counter, vol in enumerate(volumes):
         if vol > max:
-            max = vol
-            bpy.types.Scene.prototype_index = counter
-    return bpy.types.Scene.prototype_index
+            max = volcopied_reference
+            bpy.types.Scene.reference_index = counter
+    return bpy.types.Scene.reference_index
 
 def find_max_value_after_dissolve(context, objects): #!!! very inefficient currently !!! useless with new removal of basal region as z_max is known
     """Find the maximal z-value in all ventricle geometries after dissolving"""
@@ -836,22 +836,22 @@ def find_max_value_after_dissolve(context, objects): #!!! very inefficient curre
     # Remove list of copied objects after finding the maximum
     for i in range(len(objects_copy)): bpy.data.objects.remove(bpy.data.objects[str(i)], do_unlink=True)
 
-def create_basal_region_for_object(context, copied_prototype):
+def create_basal_region_for_object(context, reference_copy):
     """Create basal part for a given ventricle"""
     for obj in context.selected_objects: obj.select_set(False) # Deselect all objects
 ## Remove basal region of reference.
-    copied_prototype.select_set(True)
-    bpy.context.view_layer.objects.active = copied_prototype
-    deselect_object_vertices(copied_prototype)
-    dissolve_edge_loops(context, copied_prototype) # Remove basal region
+    reference_copy.select_set(True)
+    bpy.context.view_layer.objects.active = reference_copy
+    deselect_object_vertices(reference_copy)
+    dissolve_edge_loops(context, reference_copy) # Remove basal region
 ## Add valve and support structure boundary nodes.
-    aortic_min, mitral_min = build_both_valves(context, copied_prototype, ratio= 1) # Valves have a annuli ratio of 1
-    aortic_min_up, mitral_min_up, aortic_min_down, mitral_min_down = build_support_structure(context, copied_prototype, ratio=1.1) # Support structure for the valves have a annulie ratio of 1.1 and 1/1.1
+    aortic_min, mitral_min = build_both_valves(context, reference_copy, ratio= 1) # Valves have a annuli ratio of 1
+    aortic_min_up, mitral_min_up, aortic_min_down, mitral_min_down = build_support_structure(context, reference_copy, ratio=1.1) # Support structure for the valves have a annulie ratio of 1.1 and 1/1.1
 ## Compute height plane   
     context.scene.min_valves = np.amin([aortic_min, mitral_min, aortic_min_up, mitral_min_up, aortic_min_down, mitral_min_down]) # Compute minimal valve value for the position of the cutting plane
     if not compute_height_plane(context): return False # Compute height plane for the removal of the apical region.
 ## Poisson with remeshing and triangulation.
-    poisson_basal = create_poisson_from_object_pointcloud(context, copied_prototype)
+    poisson_basal = create_poisson_from_object_pointcloud(context, reference_copy)
     voxel_size = 0.5
     apply_voxel_remesh(voxel_size) # Apply Remesh for better mesh quality (remove small mesh elements with high cell skewness).
     # Triangulate remesh
@@ -868,7 +868,7 @@ def create_basal_region_for_object(context, copied_prototype):
     return basal_regions
 
 def compute_height_plane(context):
-    """Compute height of the plane used to cut off the apical part from the basal part of the prototype geometry"""
+    """Compute height of the plane used to cut off the apical region from the basal region of the reference geometry."""
     if context.scene.min_valves <= context.scene.max_apical: # the apical region extends over the basal region
         cons_print(f"Error: Valves ({context.scene.min_valves}) lie beneath the highest point of the ventricle({context.scene.max_apical}). Try a different setup for valve position or dissolve loops.")
         return False
@@ -1076,28 +1076,27 @@ def mesh_connect_apical_and_basal(context):
             # Hide basal region
             curr_basal.select_set(False)
             curr_basal.hide_set(True)
-    
-    # Copy prototype to use for the initial connection
-    prototype = copy_object(selected_objects[bpy.types.Scene.prototype_index].name, "prototype")
-    combine_apical_and_basal_region(context, basal_regions, prototype, selected_objects)
+    # Copy reference object to use for the initial connection
+    reference = copy_object(selected_objects[bpy.types.Scene.reference_index].name, "reference")
+    combine_apical_and_basal_region(context, basal_regions, reference, selected_objects)
     return True
 
-def combine_apical_and_basal_region(context, basal_regions, prototype, selected_objects):
+def combine_apical_and_basal_region(context, basal_regions, reference, selected_objects):
     """Combine the two regions by copying the hat for each ventricle."""
     # Deselect (and hide) all objects
     for obj in selected_objects: 
         obj.select_set(False)  
         obj.hide_set(True)
-    prototype.select_set(False)
+    reference.select_set(False)
 
-    # Apply connecting opeartion for prototype
-    prepare_geometry_for_bridging(context, prototype, basal_regions[0])
-    edge_indices_bridge = bridge_edges_prototype(context, prototype)
+    # Apply connecting opeartion for reference
+    prepare_geometry_for_bridging(context, reference, basal_regions[0])
+    edge_indices_bridge = bridge_edges_reference(context, reference)
     inset_faces_smooth(context)
 
 
-    edge_indices_triangulate = triangulate_connection(True, prototype, ref_edge_indices=[])
-    bpy.data.objects.remove(prototype, do_unlink=True) # Remove reference object
+    edge_indices_triangulate = triangulate_connection(True, reference, ref_edge_indices=[])
+    bpy.data.objects.remove(reference, do_unlink=True) # Remove reference object
     # Compute the frame of the end diastole
     frame_EDV = round(context.scene.time_diastole / context.scene.time_rr *  context.scene.frames_ventricle)
     # Apply connecting-operation for remaining ventricle geometries
@@ -1160,15 +1159,15 @@ def prepare_geometry_for_bridging(context, obj, final_basal_region):
     current_basal.select_set(True)
     bpy.ops.object.join()
 
-def bridge_edges_prototype(context, prototype):
-    """Connect basal with apical part of prototype ventricle"""
+def bridge_edges_reference(context, reference):
+    """Connect basal with apical part of the reference ventricle"""
     bpy.ops.object.mode_set(mode='EDIT') # Need to switch to edit mode 
-    selected_edges_before_indices, selected_edges_before_verts = get_selected_edges(prototype) # Collect edge indices before operation
+    selected_edges_before_indices, selected_edges_before_verts = get_selected_edges(reference) # Collect edge indices before operation
     # Connect apical and basal region
     bpy.context.tool_settings.mesh_select_mode = (False, True, False) # Activate edge mode in edit mode
     bpy.ops.mesh.looptools_bridge(cubic_strength=1, interpolation='linear', loft=False, loft_loop=False, min_width=100, mode='shortest', remove_faces=False, reverse=False, segments=1, twist=context.scene.connection_twist)
     bpy.context.tool_settings.mesh_select_mode = (True, False, False) # Return to vertex mode in edit mode
-    selected_edges_after_indices, selected_edges_after_verts = get_selected_edges(prototype) # Collect edge indices after operation
+    selected_edges_after_indices, selected_edges_after_verts = get_selected_edges(reference) # Collect edge indices after operation
     # Compare edges before and after operation and only keep the difference edges and save their vertex indices in a list
     new_edges = []
     new_edges_vert_indices = []
@@ -1414,7 +1413,7 @@ class MESH_OT_Quick_Recon(bpy.types.Operator):
         add_vessels_and_valves(context)
 
         # Delete basal regions (Cleanup) !!! Activate later
-        #bpy.data.objects.remove(bpy.data.objects[copied_prototype.name], do_unlink=True)
+        #bpy.data.objects.remove(bpy.data.objects[copied_reference.name], do_unlink=True)
         #bpy.data.objects.remove(bpy.data.objects[basal_region.name], do_unlink=True)
         return{'FINISHED'} 
 
@@ -1785,7 +1784,7 @@ def register():
     bpy.types.Scene.pos_septum = bpy.props.FloatVectorProperty(name="Top position", default = (0,1,0))
 
     bpy.types.Scene.top_index = bpy.props.IntProperty(name="Index of top position", default = 0)
-    bpy.types.Scene.prototype_index = bpy.props.IntProperty(name="Index prototype in selected objects", default = 0)
+    bpy.types.Scene.reference_index = bpy.props.IntProperty(name="Index of reference object in selected objects", default = 0)
 
     # Cutting plane variables
     bpy.types.Scene.height_plane = bpy.props.FloatProperty(name="Height(z-value) of intersection plane", default=40,  min = 0.01)
