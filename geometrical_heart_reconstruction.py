@@ -436,18 +436,16 @@ class MESH_OT_support_struct(bpy.types.Operator):
     """Create supporting  structure to help poisson algorithm accurately build basal ventricle region"""
     bl_idname = 'heart.support_struct'
     bl_label = 'Create supporting structure'
-    
     def execute(self, context):
-        ratio_annulli = 1.1
         for obj in context.selected_objects:
-            build_support_structure(context, obj, ratio_annulli)
+            build_support_structure(context, obj, ratio=1.1)
             merge_overlap(threshold = 0.0001) # Protection against double insertion of valves
         return{'FINISHED'}
 
-def build_support_structure(context, obj, ratio_annulli):
+def build_support_structure(context, obj, ratio):
     """Build support structure to help the poisson surface reconstrucion algorithm create a smooth surface after Poisson surface reconstruction."""
-    aortic_min_up, mitral_min_up = build_both_valves(context, obj, ratio_annulli) # Larger annulus structure (upscaled)
-    aortic_min_down, mitral_min_down =  build_both_valves(context, obj, 1 / ratio_annulli) # Smaller annulus structure (downscaled)
+    aortic_min_up, mitral_min_up = build_both_valves(context, obj, ratio) # Larger annulus structure (upscaled)
+    aortic_min_down, mitral_min_down =  build_both_valves(context, obj, 1 / ratio) # Smaller annulus structure (downscaled)
     return aortic_min_up, mitral_min_up, aortic_min_down, mitral_min_down
 
 class MESH_OT_poisson(bpy.types.Operator):
@@ -455,10 +453,8 @@ class MESH_OT_poisson(bpy.types.Operator):
     bl_idname = 'heart.poisson'
     bl_label = 'Apply poisson surface reconstruciton to receive estimated ventricle geometry'
     def execute(self, context):
-        # Check for no selected objects and correct context mode
-        if len(bpy.context.selected_objects) == 0 or bpy.context.mode != 'OBJECT': return{'CANCELLED'}
-        # Repeat algorithm for all selected objects
-        for object in bpy.context.selected_objects: create_poisson_from_object_pointcloud(context, object)
+        if len(bpy.context.selected_objects) == 0 or bpy.context.mode != 'OBJECT': return{'CANCELLED'} # Check for no selected objects and correct context mode
+        for object in bpy.context.selected_objects: create_poisson_from_object_pointcloud(context, object) # Repeat Poisson-surface-reconstruction algorithm for all selected objects
         return{'FINISHED'}
 
 def create_poisson_from_object_pointcloud(context, obj):
@@ -755,7 +751,6 @@ class MESH_OT_create_basal(bpy.types.Operator):
     """Create basal region of ventricle using the position and angles of the heart valves."""
     bl_idname = 'heart.create_basal'
     bl_label = 'Reconstruct all selected ventricles'
-
     def execute(self, context):
         if not mesh_create_basal(context): return{'CANCELLED'}
         return{'FINISHED'} 
@@ -794,7 +789,7 @@ def mesh_create_basal(context):
     bpy.data.objects.remove(bpy.data.objects["basal_region_poisson"], do_unlink=True)
     return basal_regions
 
-def find_prototype_ventricle(objects): #!!! very inefficient currently
+def find_prototype_ventricle(objects): 
     """Find prototype object with volume closest to mean volume."""
     # Create list of volumes
     volumes = []
@@ -814,19 +809,18 @@ def find_prototype_ventricle(objects): #!!! very inefficient currently
             bpy.types.Scene.prototype_index = counter
     return bpy.types.Scene.prototype_index
 
-def find_max_value_after_dissolve(context, objects): 
+def find_max_value_after_dissolve(context, objects): #!!! very inefficient currently !!! useless with new removal of basal region as z_max is known
     """Find the maximal z-value in all ventricle geometries after dissolving"""
     # Copy object list
     objects_copy = []
     for counter, obj in enumerate(objects):
         copied_obj =  copy_object(obj.name, str(counter))
         objects_copy.append(copied_obj)
-    
     # Initialize objects and their copies deselected 
     for obj in objects: obj.select_set(False)
     for obj in objects_copy: obj.select_set(False)
     context.scene.max_apical = 0 # reset max_apical value
-
+## Find max value in z-direction
     for obj in objects_copy:
         # Select object,set is as active and deselect all its vertices
         obj.select_set(True)
@@ -839,71 +833,48 @@ def find_max_value_after_dissolve(context, objects):
         if max_val[2] > context.scene.max_apical: 
             context.scene.max_apical = max_val[2]
         obj.select_set(False)
-    
     # Remove list of copied objects after finding the maximum
     for i in range(len(objects_copy)): bpy.data.objects.remove(bpy.data.objects[str(i)], do_unlink=True)
 
 def create_basal_region_for_object(context, copied_prototype):
     """Create basal part for a given ventricle"""
-    # Deselect all objects
-    for obj in context.selected_objects:
-        obj.select_set(False)
-
-    # Create basal region from input object (largest ventricle)
+    for obj in context.selected_objects: obj.select_set(False) # Deselect all objects
+## Remove basal region of reference.
     copied_prototype.select_set(True)
     bpy.context.view_layer.objects.active = copied_prototype
     deselect_object_vertices(copied_prototype)
-    dissolve_edge_loops(context, copied_prototype)
-
-    # Add valves and support structure
-    ratio_annulli = 1
-    aortic_min, mitral_min = build_both_valves(context, copied_prototype, ratio_annulli)
-    ratio_annulli = 1.1
-    aortic_min_up, mitral_min_up, aortic_min_down, mitral_min_down = build_support_structure(context, copied_prototype, ratio_annulli)
-    
-    # Compute minimal valve value for the position of the cutting plane
-    minima = [aortic_min, mitral_min, aortic_min_up, mitral_min_up, aortic_min_down, mitral_min_down]
-    cons_print(f"Minima : {minima}")
-    context.scene.min_valves = np.amin(minima)
-
-    if not compute_height_plane(context): return False
-
+    dissolve_edge_loops(context, copied_prototype) # Remove basal region
+## Add valve and support structure boundary nodes.
+    aortic_min, mitral_min = build_both_valves(context, copied_prototype, ratio= 1) # Valves have a annuli ratio of 1
+    aortic_min_up, mitral_min_up, aortic_min_down, mitral_min_down = build_support_structure(context, copied_prototype, ratio=1.1) # Support structure for the valves have a annulie ratio of 1.1 and 1/1.1
+## Compute height plane   
+    context.scene.min_valves = np.amin([aortic_min, mitral_min, aortic_min_up, mitral_min_up, aortic_min_down, mitral_min_down]) # Compute minimal valve value for the position of the cutting plane
+    if not compute_height_plane(context): return False # Compute height plane for the removal of the apical region.
+## Poisson with remeshing and triangulation.
     poisson_basal = create_poisson_from_object_pointcloud(context, copied_prototype)
-
     voxel_size = 0.5
-    apply_voxel_remesh(voxel_size) # Apply Remesh for better mesh quality
-
+    apply_voxel_remesh(voxel_size) # Apply Remesh for better mesh quality (remove small mesh elements with high cell skewness).
     # Triangulate remesh
     bpy.ops.object.modifier_add(type='TRIANGULATE')
     bpy.ops.object.modifier_apply(modifier="Triangulate")
-
-    merge_vertices(voxel_size) # Merge vertices close to each other
-
-    deselect_object_vertices(poisson_basal)
+    merge_vertices(voxel_size) # Merge vertices close to each other.
+## Remove apical regions
     remove_apical_region(context, poisson_basal)
-
-    # Remove nodes in valve areas
+## Remove nodes in valve areas, insert of interface nodes and smooth the basal region.
     create_valve_orifice(context, "Aortic")
     create_valve_orifice(context, "Mitral")
-    
-    # Create exact inputs for the valve boundaries and connect it with the remaining mesh
-    basal_regions = insert_valves_into_basal(context, poisson_basal)    
-
-    # Smooth basal region
-    smooth_basal_region(context, voxel_size)
-
+    basal_regions = insert_valves_into_basal(context, poisson_basal) # Create exact inputs for the valve boundaries and connect it with the remaining basal region.
+    smooth_basal_region(context, voxel_size) # Smooth basal region nodes excluding valves and lower edge loop.
     return basal_regions
 
 def compute_height_plane(context):
     """Compute height of the plane used to cut off the apical part from the basal part of the prototype geometry"""
-    distance =  context.scene.min_valves - context.scene.max_apical
-    if distance <= 0: # the apical region extends over the basal region
+    if context.scene.min_valves <= context.scene.max_apical: # the apical region extends over the basal region
         cons_print(f"Error: Valves ({context.scene.min_valves}) lie beneath the highest point of the ventricle({context.scene.max_apical}). Try a different setup for valve position or dissolve loops.")
         return False
     elif context.scene.min_valves < 1.025 * context.scene.max_apical: # Basal and apical region lie very close to one another. This could lead to large kinks in the geometry
-        cons_print("Info: Basal and apical region very close to one another. The geometry may contain large kinks. Try a higher dissolve loop number or higher z-value for the input valves.")
-    else: # Basal and apical region have enough distance
-        pass
+        cons_print("Info: The basal and apical region are very close to one another. The geometry may contain large kinks especially in the connection between those regions. Try a higher dissolve loop number or higher z-value for the input valves.")
+    else: pass # Basal and apical region have enough distance
     context.scene.height_plane = (context.scene.max_apical + context.scene.min_valves) / 2 # Choose z-value between lowest valve vertex and highest basal vertex
     return True
 
@@ -926,16 +897,15 @@ def merge_vertices(voxel_size):
 
 def remove_apical_region(context, obj):
     """Remove the apical ventricle region from the geometry to create solely the basal region used for all timeframes"""
+    deselect_object_vertices(obj)
     # Find vertices to delete (below z-coordinate threshold)
     bm = bmesh.new()       
     bm.from_mesh(obj.data)
     bm.faces.ensure_lookup_table()
     for v in bm.verts:
         vertice_coords = obj.matrix_world @ v.co # Transfer to global coords
-        if vertice_coords[2] < context.scene.height_plane: # only vertices below threshold (height-plane) shall be deleted
-            v.select = True
-        else:
-            v.select = False
+        if vertice_coords[2] < context.scene.height_plane: v.select = True # only vertices below threshold (height-plane) shall be deleted
+        else:  v.select = False
 
     bm.to_mesh(obj.data) # Transfer selection to object 
     # Remove vertices below threshold (height-plane)
