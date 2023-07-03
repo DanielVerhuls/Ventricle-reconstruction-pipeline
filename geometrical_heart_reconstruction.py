@@ -80,7 +80,7 @@ class MESH_OT_get_node(bpy.types.Operator):
         # Using temporary veriables prevents the change of the global variable, when to many nodes are selected.
         if self.point_mode == "Top":  
             context.scene.pos_top = vertice_coords
-            context.scene.top_index = index # Update index of the top position
+            context.scene.top_index = index # Update index of the top position   # !!! kann raus sobald remove_basal neu ist !!!remove_basal !!!removebasal
         elif self.point_mode == "Bot": context.scene.pos_bot = vertice_coords
         elif self.point_mode == "Septum": context.scene.pos_septum = vertice_coords
         else:
@@ -162,7 +162,7 @@ def get_rotation_angle(numerator, denominator):
     return angle
 
 class MESH_OT_cut_edge_loops(bpy.types.Operator):
-    """Remove the upper loops of the ventricle from the pre-selected top position"""
+    """Remove the basal region of the ventricle by deleting edge loops of the ventricle from the pre-selected top position."""
     bl_idname = 'heart.cut_edge_loops'
     bl_label = 'Cut_edge_loops'
 
@@ -176,29 +176,25 @@ class MESH_OT_cut_edge_loops(bpy.types.Operator):
 
 def cut_edge_loops(context, selected_objects):
     """Function to remove the upper edge loops of the largest ventricle"""
-    # Initialize objects deselected
-    for obj in selected_objects: obj.select_set(False)
-
+    for obj in selected_objects: obj.select_set(False) # Initialize objects deselected
     for obj in selected_objects:
         # Select object,set is as active and deselect all its vertices
         obj.select_set(True)
         bpy.context.view_layer.objects.active = obj
         deselect_object_vertices(obj)
-        # Cut basal part of the ventricle
+        # Cut basal region off of the ventricle
         dissolve_edge_loops(context, obj)
-        obj.select_set(False)
+        obj.select_set(False) # Deselect object, after removing basal region
 
 def get_neighbour_vertices(v):
     """Return neighbouring vertices of a vertex"""
     neighbours_index = []
-    for e in v.link_edges:
-        neighbours_index.append(e.other_vert(v).index)
+    for e in v.link_edges: neighbours_index.append(e.other_vert(v).index)
     return neighbours_index
 
 def dissolve_edge_loops(context, obj): 
     """Dissolve a given amount of edge loops."""
-    # Make sure vertex mode is selected
-    bpy.context.tool_settings.mesh_select_mode = (True, False, False)
+    bpy.context.tool_settings.mesh_select_mode = (True, False, False) # Make sure vertex mode is selected in edit mode
     # Transfer object in mesh data
     bm = bmesh.new()       
     bm.from_mesh(obj.data)
@@ -248,7 +244,7 @@ def dissolve_edge_loops(context, obj):
     subdivide_last_edge_loop() #Apply subdivide to smooth out further connection
 
 def subdivide_last_edge_loop(): #!!! maybe erweitern durch anzahl subdivisions in abhaengigkeit des verhaeltnisses zwischen der anzahl der oberen apikalen und unteren basalen nodes.!!!
-    """Subdivide last edge loop in two steps before bridging for a smooth transition."""
+    """Subdivide last edge loop in two steps before bridging for a better transition between coarse apical and fine basal mesh."""
     bpy.ops.object.mode_set(mode='EDIT') 
     bpy.ops.mesh.select_more()
     bpy.ops.mesh.subdivide(ngon=False)
@@ -256,7 +252,7 @@ def subdivide_last_edge_loop(): #!!! maybe erweitern durch anzahl subdivisions i
     bpy.ops.mesh.select_less()
     bpy.ops.object.mode_set(mode='OBJECT')
 
-class MESH_OT_new_remove_basal(bpy.types.Operator): #!!!
+class MESH_OT_new_remove_basal(bpy.types.Operator): 
     """Remove the basal region using a threshold value."""
     bl_idname = 'heart.remove_basal'
     bl_label = 'Remove_basal_region'
@@ -268,11 +264,10 @@ class MESH_OT_new_remove_basal(bpy.types.Operator): #!!!
 
 def remove_basal_region(context, obj): #!!!
     """Remove basal region of the ventricle using a threshold."""
-    bpy.ops.object.mode_set(mode='OBJECT') 
-    cons_print(f"Object: {obj.name}")
+    if obj.mode == 'EDIT': bpy.ops.object.mode_set()
     deselect_object_vertices(obj)
-    deleted_verts = []
      # Find vertices to delete (above z-coordinate threshold)
+    deleted_verts = []
     bpy.ops.object.mode_set(mode='OBJECT') 
     bm = bmesh.new()       
     bm.from_mesh(obj.data)
