@@ -371,12 +371,7 @@ def remove_basal_region(context, obj): #!!!
         bpy.ops.mesh.select_more()
         bpy.ops.object.vertex_group_deselect()
         bpy.ops.mesh.vertices_smooth(factor=0.4, repeat=3-i)
-
     
-    #deselect_object_vertices(obj)
-    #bpy.ops.object.vertex_group_select()
-    
-
     bpy.ops.object.mode_set(mode='OBJECT')
 
 
@@ -393,7 +388,7 @@ class MESH_OT_build_valve(bpy.types.Operator):
         ratio_annulli = 1
         for obj in context.selected_objects:
             if not build_both_valves(context, obj, ratio_annulli): return{'CANCELLED'} 
-            merge_overlap(threshold = 0.0001)
+            merge_overlap(threshold = 0.0001) # Protection against double insertion of valves
         return{'FINISHED'}
 
 def build_both_valves(context, obj, ratio):
@@ -405,10 +400,8 @@ def build_valve(context, obj,  valve_mode, ratio):
     """Build ventricle valve and connect it to current geometry"""
     if valve_mode == "Aortic": obj_name = "por_Boundary_AV"
     elif valve_mode == "Mitral": 
-        if context.scene.bool_porous:
-            obj_name = "por_Boundary_MV"
-        else:
-            obj_name = "Boundary_MV"
+        if context.scene.bool_porous: obj_name = "por_Boundary_MV"
+        else: obj_name = "Boundary_MV"
     else: return False
     return add_and_join_object(context, obj, obj_name, valve_mode, ratio)
 
@@ -422,29 +415,21 @@ def add_and_join_object(context, obj, new_obj_name, valve_mode, ratio):
     scale_rotate_translate_object(context, new_obj, valve_mode, ratio)
     maxim, minim = get_min_max(new_obj)
 
-    join_objects(obj, new_obj)    
+    join_objects(obj, new_obj) # Combine new object with selected object 
     return minim[2]
 
 def scale_rotate_translate_object(context, obj, valve_mode, ratio):
-    """Rotate and shift object."""
-    translation, angles, radius_vertical, radius_horizontal = get_valve_data(context, valve_mode)
-
-    obj.scale[0] = radius_vertical * ratio
-    obj.scale[1] = radius_horizontal * ratio
-    obj.scale[2] = (radius_horizontal + radius_vertical) / 2 * ratio
-
-    obj.rotation_euler[0] += angles[0]
-    obj.rotation_euler[1] += angles[1]
-    obj.rotation_euler[2] += angles[2]
-
-    obj.location[0] += translation[0]
-    obj.location[1] += translation[1]
-    obj.location[2] += translation[2]
-    # Apply changes
-    bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)
+    """Scale, rotate and shift object and save transformation."""
+    translation, angles, radius_vertical, radius_horizontal = get_valve_data(context, valve_mode) # Get scale from UI-data.
+    obj.scale = (ratio * radius_vertical, ratio * radius_horizontal, ratio * (radius_horizontal + radius_vertical) / 2) # Scale object with given ratio.
+    obj.rotation_euler = angles # Rotate object by input angles.
+    obj.location = translation # Translate object with input translation
+    if obj.mode == 'OBJECT': bpy.ops.object.mode_set()
+    bpy.ops.object.transform_apply(location=True, rotation=True, scale=True) # Apply changes.
+    bpy.ops.object.mode_set()
 
 def join_objects(obj, joined_obj):
-    """Join and two objects without changing the selection"""
+    """Join two objects without changing the selection."""
     # Set correct selections before joining geometries
     bpy.ops.object.mode_set(mode='OBJECT') 
     bpy.ops.object.select_all(action='DESELECT')
@@ -455,29 +440,22 @@ def join_objects(obj, joined_obj):
     bpy.ops.object.join()
 
 def get_min_max(obj):
-    """Return smallest and highest value of an object in each dimension"""
+    """Return smallest and highest value of an object in each dimension."""
     maxim = np.array([-1000.0, -1000.0, -1000.0])
     minim = np.array([1000.0, 1000.0, 1000.0])
     for p in obj.data.vertices:
         vertice_coords = obj.matrix_world @ p.co
-        
-        if vertice_coords[0] > maxim[0]:
-            maxim[0] = vertice_coords[0]
-        if vertice_coords[0] < minim[0]:
-            minim[0] = vertice_coords[0]
-        if vertice_coords[1] > maxim[1]:
-            maxim[1] = vertice_coords[1]
-        if vertice_coords[1] < minim[1]:
-            minim[1] = vertice_coords[1]
-        if vertice_coords[2] > maxim[2]:
-            maxim[2] = vertice_coords[2]
-        if vertice_coords[2] < minim[2]:
-            minim[2] = vertice_coords[2]
+        # Find maxima and minima.
+        if vertice_coords[0] > maxim[0]: maxim[0] = vertice_coords[0]
+        if vertice_coords[0] < minim[0]: minim[0] = vertice_coords[0]
+        if vertice_coords[1] > maxim[1]: maxim[1] = vertice_coords[1]
+        if vertice_coords[1] < minim[1]: minim[1] = vertice_coords[1]
+        if vertice_coords[2] > maxim[2]: maxim[2] = vertice_coords[2]
+        if vertice_coords[2] < minim[2]: minim[2] = vertice_coords[2]
     return maxim, minim
 
 def merge_overlap(threshold):
-    """Merge overlaping vertices of two recently joined objects."""
-    # Merge overlapping doubled vertices in valve region
+    """Merge overlapping vertices of two recently joined objects."""
     bpy.ops.object.mode_set(mode='EDIT') 
     bpy.ops.mesh.select_all(action='SELECT')
     bpy.ops.mesh.remove_doubles(threshold=threshold, use_sharp_edge_from_normals=False, use_unselected=False)
@@ -492,11 +470,11 @@ class MESH_OT_support_struct(bpy.types.Operator):
         ratio_annulli = 1.1
         for obj in context.selected_objects:
             build_support_structure(context, obj, ratio_annulli)
-            merge_overlap(threshold = 0.0001)
+            merge_overlap(threshold = 0.0001) # Protection against double insertion of valves
         return{'FINISHED'}
 
 def build_support_structure(context, obj, ratio_annulli):
-    """Build support structure to help the poisson surface reconstrucion algorithm create a smooth solution"""
+    """Build support structure to help the poisson surface reconstrucion algorithm create a smooth surface after Poisson surface reconstruction."""
     aortic_min_up, mitral_min_up = build_both_valves(context, obj, ratio_annulli) # Larger annulus structure (upscaled)
     aortic_min_down, mitral_min_down =  build_both_valves(context, obj, 1 / ratio_annulli) # Smaller annulus structure (downscaled)
     return aortic_min_up, mitral_min_up, aortic_min_down, mitral_min_down
@@ -505,57 +483,44 @@ class MESH_OT_poisson(bpy.types.Operator):
     """Apply Poisson surface reconstrucion to point cloud"""
     bl_idname = 'heart.poisson'
     bl_label = 'Apply poisson surface reconstruciton to receive estimated ventricle geometry'
-
     def execute(self, context):
         # Check for no selected objects and correct context mode
-        if len(bpy.context.selected_objects) == 0 or bpy.context.mode != 'OBJECT': 
-            return{'CANCELLED'}
-
+        if len(bpy.context.selected_objects) == 0 or bpy.context.mode != 'OBJECT': return{'CANCELLED'}
         # Repeat algorithm for all selected objects
-        for object in bpy.context.selected_objects:
-            create_poisson_from_object_pointcloud(context, object)
+        for object in bpy.context.selected_objects: create_poisson_from_object_pointcloud(context, object)
         return{'FINISHED'}
 
 def create_poisson_from_object_pointcloud(context, obj):
     """Create poisson surface reconstruction for a single point cloud"""
-    # Get point data of current object
-    point_data = np.asarray(obj.data.vertices) 
+    point_data = np.asarray(obj.data.vertices) # Get point data of current object
     # Initialize and fill entries of object vertices
     object_vertices = np.empty(shape=[0, 3])
     for point in point_data:
-        # Rotate points in world matrix
-        vertice_coords = obj.matrix_world @ point.co   
+        vertice_coords = obj.matrix_world @ point.co # Rotate points in world matrix
         # Append new vertex to point cloud array
         new_point = np.array([[vertice_coords[0], vertice_coords[1], vertice_coords[2]]])
         object_vertices = np.concatenate((object_vertices, new_point), axis=0)
-    
     # Create Point cloud object and fill it with points
     point_cloud_data = o3d.geometry.PointCloud()
     point_cloud_data.points = o3d.utility.Vector3dVector(object_vertices)
-
     # Prepare point cloud for poisson surface reconstruction. It needs the normals of the points in the pointcloud
     point_cloud_data.estimate_normals()
     point_cloud_data.normalize_normals()
     point_cloud_data.orient_normals_consistent_tangent_plane(20)
     # Apply poisson surface reconstruction
     poisson_mesh, poisson_dens = o3d.geometry.TriangleMesh.create_from_point_cloud_poisson(point_cloud_data, depth = context.scene.poisson_depth, width=0, scale=1.1, linear_fit=False, n_threads= 1)
-
     # Initialize empty arrays for object data
-    vertices = []
-    edges = []
-    faces = []
+    vertices, edges, faces = ([] for i in range(3))
     # Assign faces vertices and edges
     vertices = poisson_mesh.vertices
-    
     faces = poisson_mesh.triangles
-
     # Create object from vertices, edges and faces in blender
     emptyMesh = bpy.data.meshes.new('emptyMesh')
     emptyMesh.from_pydata(vertices, edges, faces)
     emptyMesh.update()
     poisson_obj = bpy.data.objects.new(obj.name + "_poisson", emptyMesh)    
     bpy.context.collection.objects.link(poisson_obj)
-    
+    # Change selection.
     obj.select_set(False)
     poisson_obj.select_set(True)
     bpy.context.view_layer.objects.active = poisson_obj
@@ -564,124 +529,101 @@ def create_poisson_from_object_pointcloud(context, obj):
     return poisson_obj
 
 class MESH_OT_create_valve_orifice(bpy.types.Operator):
-    """Operator in panel to export meshes"""
+    """Create valve orifice for the later insertion of the valve interface nodes."""
     bl_idname = 'heart.create_valve_orifice'
     bl_label = 'Dissolve vertices blocking the valve entries into a single face, delete this face and create a vertex group for all vertices around that face'
 
     def execute(self, context):
         # Check for the right amount of objects and context mode
-        if len(bpy.context.selected_objects) == 0 or bpy.context.mode != 'OBJECT': 
-            return{'CANCELLED'}
+        if len(bpy.context.selected_objects) == 0 or bpy.context.mode != 'OBJECT': return{'CANCELLED'}
         for obj in context.selected_objects:
-            # Deselect all vertices
-            # deselect_object_vertices(obj)
-            bpy.ops.object.mode_set(mode='EDIT')
-            bpy.ops.mesh.select_all(action = 'DESELECT')  
-            bpy.ops.object.mode_set(mode='OBJECT')
-            # Dissolve valve orifices
+            deselect_object_vertices(obj) # Deselect all vertices
+            # Delete nodes in areas around the valves to create valve orifices.
             create_valve_orifice(context, "Aortic")
             create_valve_orifice(context, "Mitral")
         return{'FINISHED'}
 
-def create_valve_orifice(context, valve_mode): # Change to create orifice
-    """Create orifice in the geometry, where valves will be added later."""
-    ## Dissolve vertices inside of a given area-object placed around the valve vertices
+def create_valve_orifice(context, valve_mode): 
+    """Create orifice in the geometry, where valve interface nodes will be inserted later."""
+    # Dissolve vertices inside of a given area-object placed around the valve vertices.
     select_valve_vertices(context, valve_mode) 
     bpy.ops.object.mode_set(mode='EDIT')
     bpy.ops.mesh.dissolve_verts()
     bpy.ops.object.mode_set(mode='OBJECT')
-
-    ## Remove face remaining after dissolving vertices
+    # Remove face remaining after dissolving vertices.
     translation, angles, radius_vertical, radius_horizontal = get_valve_data(context, valve_mode)
     obj = bpy.context.active_object
     if obj.mode == 'EDIT': bpy.ops.object.mode_set() # Change to object mode
     bpy.context.tool_settings.mesh_select_mode = (False, True, False)
-
     # Transfer object in mesh data
     bm = bmesh.new()       
     bm.from_mesh(obj.data)
     bm.faces.ensure_lookup_table()
     vertices_orifice = []
-
     # Select vertices of newly created face after dissolving
     for f in bm.faces:
         f.select = False
         # Compute difference between center and translation vector and check if it is smaller than the smaller valve radius
         if distance_vec(f.calc_center_median(), translation) < min(radius_vertical, radius_horizontal)  / 2: 
-            for v in f.verts:
-                vertices_orifice.append(v.index)
+            for v in f.verts: vertices_orifice.append(v.index)
             f.select = True
-    
-    # Delete face in orifice
+    # Delete face in orifice.
     faces = [f for f in bm.faces if f.select]
     bmesh.ops.delete(bm, geom = faces, context = 'FACES_ONLY')
     bm.to_mesh(obj.data)
-    
-    # Create vertex group containing orifice vertices
+    # Create vertex group containing orifice edge loop vertices.
     vg_orifice = obj.vertex_groups.new( name = f"{valve_mode}_orifice")
     vg_orifice.add( vertices_orifice, 1, 'ADD')
-
-    smooth_relax_edgeloop(obj, vg_orifice) # Remove troubling vertices in orifice vertex group and smooth this border
-
+    # Remove troubling vertices(vertices with 2 neighbours) in orifice vertex group and smooth this border
+    smooth_relax_edgeloop(obj, vg_orifice) 
     # Subdivide for the real mitral valve for a smoother transition
     if valve_mode == "Mitral" and context.scene.bool_porous: 
-        #!!!select more #Smoother mesh transition
+        #!!!select more #Smoother mesh transition !!! subdivide last edge loop???!!!
         bpy.ops.mesh.subdivide(number_cuts=1, ngon=False)
         # select less
         # subdivide
         bpy.ops.object.mode_set(mode='OBJECT')
         vg_orifice.add( vertices_orifice, 1, 'ADD')
         bpy.ops.object.mode_set(mode='EDIT')
+    bpy.ops.object.mode_set(mode='OBJECT')
     return True
 
 def select_valve_vertices(context, valve_mode):
     """Select all vertices of a given valve"""
     original_obj = bpy.context.active_object
-    # Create valve_area object depending on valve
+    # Create valve_area object depending on valve !!! if valve_area object name already exists, rename it
     if valve_mode == "Mitral":
         if context.scene.bool_porous: copy_object('por_Area_MV', 'Valve_area')
         else: copy_object('Area_MV', 'Valve_area')
-    elif valve_mode == "Aortic":
-        copy_object('Area_AV', 'Valve_area')
-    else:
-        return False
+    elif valve_mode == "Aortic": copy_object('Area_AV', 'Valve_area')
+    else: return False
     valve_area = bpy.data.objects['Valve_area']
-
-    translation, angles, radius_vertical, radius_horizontal = get_valve_data(context, valve_mode)
     # Rescale, translate and rotate valve area
-    ratio = 1.05 
-    bpy.data.objects[valve_area.name].scale = (ratio * radius_vertical, ratio * radius_horizontal, ratio * (radius_horizontal + radius_vertical) / 2) 
-    bpy.data.objects[valve_area.name].location = translation # Set translation
-    bpy.data.objects[valve_area.name].rotation_euler = angles # Rotation opertions around x-, y- and z-axis. 
-
+    scale_rotate_translate_object(context, valve_area, valve_mode, ratio=1.025) # !!! scale of valve_area should be good, but maybe a context UI variable might be good.
+    # Select all vertices in the valve area object
     bpy.ops.object.mode_set(mode='EDIT')
     bpy.ops.mesh.select_all(action="DESELECT")
-
     mesh=bmesh.from_edit_mesh(bpy.context.object.data)
     cut_obj_matrix = valve_area.matrix_world.inverted()
-    mat = cut_obj_matrix @ original_obj.matrix_world      
-        
+    mat = cut_obj_matrix @ original_obj.matrix_world         
     selected_verts = [v
         for v in mesh.verts
         if is_inside((mat @ v.co), valve_area)]
-    for v in selected_verts:
-        if v.co.z > -1:
-            v.select = True
-
+    for v in selected_verts: 
+        if v.co.z > -1: v.select = True
     bpy.ops.object.mode_set(mode='OBJECT')
     bpy.data.objects.remove(bpy.data.objects[valve_area.name], do_unlink=True)    # Remove valve area object
     
 def distance_vec(point1, point2) -> float:
-    """Calculate distance between two points in 3D."""
+    """Calculate distance between two nodes."""
     return math.sqrt((point2[0] - point1[0]) ** 2 +
                      (point2[1] - point1[1]) ** 2 +
                      (point2[2] - point1[2]) ** 2)
 
 def is_inside(p, cut_obj):
-    """Check if a point p is inside the object cut_obj"""
+    """Check if a point p is inside the object cut_obj."""
     result, point, normal, face = cut_obj.closest_point_on_mesh(p)
-    if not result:
-        return False
+    if not result: return False
     p2 = point-p
     v = p2.dot(normal)
     return not (v < 0.0)
@@ -698,17 +640,15 @@ def get_valve_data(context, valve_mode):
         angles = np.radians(context.scene.angle_mitral)
         radius_vertical = context.scene.mitral_radius_long
         radius_horizontal = context.scene.mitral_radius_small
-    else:
-        return False, False
+    else: return False, False, False, False
     return translation, angles, radius_vertical, radius_horizontal 
     
 class MESH_OT_connect_valves(bpy.types.Operator):
-    """Operator in panel to export meshes"""
+    """Connect valve interface nodes with orifice for mitral and aortic valve."""
     bl_idname = 'heart.connect_valve'
     bl_label = 'Connect valves'
 
     def execute(self, context):
-        # Connect valves with orifice
         connect_valve_orifice(context, "Aortic", valve_index = 4)
         connect_valve_orifice(context, "Mitral", valve_index = 4)
         return{'FINISHED'}
@@ -721,14 +661,11 @@ def connect_valve_orifice(context, valve_mode, valve_index):
     # Change selection mode in edit mode for brige loop operator
     bpy.ops.object.mode_set(mode='EDIT')
     bpy.ops.mesh.bridge_edge_loops()
-
-    #bpy.ops.mesh.looptools_bridge(cubic_strength=1, interpolation='linear', loft=False, loft_loop=False, min_width=100, mode='shortest', remove_faces=False, reverse=False, segments=1, twist=0)
-    #bpy.ops.mesh.quads_convert_to_tris(quad_method='BEAUTY', ngon_method='BEAUTY')
     bpy.ops.object.mode_set(mode='OBJECT')
     bpy.context.tool_settings.mesh_select_mode = (True, False, False)
 
 def smooth_relax_edgeloop(obj, vg_orifice):
-    """Relax selected edgeloop such that vertices with only two edges get deleted before relaxation, because these vertices will create skew triangles"""
+    """Relax selected edge loop such that vertices with only two edges get deleted before relaxation, because these vertices will create skew triangles."""
     # Transfer data into edit mode
     me = obj.data
     bpy.ops.object.mode_set(mode='EDIT') 
@@ -750,7 +687,6 @@ def smooth_relax_edgeloop(obj, vg_orifice):
         bm.select_flush_mode()   
         me.update()
         bpy.ops.mesh.delete(type='VERT')
-    
     # Select vertices in vertex group of orifice vertices
     bpy.ops.object.vertex_group_set_active(group=str(vg_orifice.name))
     bpy.ops.object.vertex_group_select()
@@ -798,13 +734,12 @@ class MESH_OT_Add_Atrium(bpy.types.Operator):
         return{'FINISHED'}
 
 def add_atrium(context):
-    """Copy atrium and place it above the mitral valve as a seperate object"""
+    """Copy atrium and place it above the mitral valve as a separate object."""
     # Choose the atrium fitting the current case
     if context.scene.bool_porous: atrium = copy_object("por_Atrium", "atrium")
     else: atrium = copy_object("Atrium", "atrium")
     atrium.select_set(True)
     bpy.context.view_layer.objects.active = atrium
-    # Modify the copied object to fit in the correct place
     scale_rotate_translate_object(context, atrium, "Mitral", ratio=1)
     return atrium
 
@@ -818,11 +753,10 @@ class MESH_OT_Add_Aorta(bpy.types.Operator):
         return{'FINISHED'}
     
 def add_aorta(context):
-    """Copy aorta and place it above the aortic valve as a seperate object"""
+    """Copy aorta and place it above the aortic valve as a separate object"""
     aorta = copy_object("por_Aorta", "aorta")
     aorta.select_set(True)
     bpy.context.view_layer.objects.active = aorta
-    # Modify the copied object to fit in the correct place
     scale_rotate_translate_object(context, aorta, "Aortic", ratio=1)
     return aorta
 
