@@ -100,7 +100,7 @@ class MESH_OT_get_node(bpy.types.Operator):
         # Using temporary veriables prevents the change of the global variable, when to many nodes are selected.
         if self.point_mode == "Top":  
             context.scene.pos_top = vertice_coords
-            context.scene.top_index = index # Update index of the top position   # !!! kann raus sobald remove_basal neu ist !!!remove_basal !!!removebasal
+            context.scene.top_index = index # Update index of the top position   # !!! kann raus sobald remove_basal neu ist 
         elif self.point_mode == "Bot": context.scene.pos_bot = vertice_coords
         elif self.point_mode == "Septum": context.scene.pos_septum = vertice_coords
         else:
@@ -258,7 +258,7 @@ def dissolve_edge_loops(context, obj):
             v.select = False
     subdivide_last_edge_loop() #Apply subdivide to smooth out further connection
 
-def subdivide_last_edge_loop(): #!!! maybe erweitern durch anzahl subdivisions in abhaengigkeit des verhaeltnisses zwischen der anzahl der oberen apikalen und unteren basalen nodes.!!!
+def subdivide_last_edge_loop(): #!!! maybe erweitern durch anzahl subdivisions in abhaengigkeit des verhaeltnisses zwischen der anzahl der oberen apikalen und unteren basalen nodes.
     """Subdivide last edge loop in two steps before bridging for a better transition between coarse apical and fine basal mesh."""
     bpy.ops.object.mode_set(mode='EDIT') 
     bpy.ops.mesh.select_more()
@@ -286,10 +286,9 @@ def remove_basal_region(context, obj): #!!!
     bm = bmesh.new()       
     bm.from_mesh(obj.data)
     bm.faces.ensure_lookup_table()
-    z_cutoff_plane = 30 #!!! context variable draus machen
     for v in bm.verts:
         vertice_coords = obj.matrix_world @ v.co # Transfer to global coordinate system.
-        if vertice_coords[2] > z_cutoff_plane: # Only vertices above threshold are selected to be deleted
+        if vertice_coords[2] > context.scene.remove_basal_threshold: # Only vertices above threshold are selected to be deleted
             v.select = True
             deleted_verts.append(v.index)
 
@@ -345,7 +344,7 @@ def remove_basal_region(context, obj): #!!!
     bm.faces.ensure_lookup_table()
     for v in bm.verts:
         vertice_coords = obj.matrix_world @ v.co 
-        if vertice_coords[2] > 9 / 10 * z_cutoff_plane: v.select = True
+        if vertice_coords[2] > 9 / 10 * context.scene.remove_basal_threshold: v.select = True
     bm.to_mesh(obj.data) # Transfer selection to object 
     bpy.ops.object.mode_set(mode='EDIT') 
     # First hard smoothing operation
@@ -543,7 +542,7 @@ def create_valve_orifice(context, valve_mode):
     smooth_relax_edgeloop(obj, vg_orifice) 
     # Subdivide for the real mitral valve for a smoother transition.
     if valve_mode == "Mitral" and context.scene.bool_porous: 
-        #!!!select more #Smoother mesh transition !!! subdivide last edge loop???!!!
+        #!!!select more #Smoother mesh transition, subdivide last edge loop
         bpy.ops.mesh.subdivide(number_cuts=1, ngon=False)
         # select less
         # subdivide
@@ -564,7 +563,7 @@ def select_valve_vertices(context, valve_mode):
     else: return False
     valve_area = bpy.data.objects['Valve_area']
     # Rescale, translate and rotate valve area
-    scale_rotate_translate_object(context, valve_area, valve_mode, ratio=1.025) # !!! scale of valve_area should be good, but maybe a context UI variable might be good.
+    scale_rotate_translate_object(context, valve_area, valve_mode, ratio=1.025) # !!! scale of valve_area should be good, but maybe a context UI variable might be better.
     # Select all vertices in the valve area object
     bpy.ops.object.mode_set(mode='EDIT')
     bpy.ops.mesh.select_all(action="DESELECT")
@@ -800,7 +799,7 @@ def find_reference_ventricle(objects):
             bpy.types.Scene.reference_index = counter
     return bpy.types.Scene.reference_index
 
-def find_max_value_after_dissolve(context, objects): #!!! very inefficient currently !!! useless with new removal of basal region as z_max is known
+def find_max_value_after_dissolve(context, objects): #!!! very inefficient currently and useless with new removal of basal region as z_max is known
     """Find the maximal z-value in all ventricle geometries after dissolving"""
     # Copy object list
     objects_copy = []
@@ -1558,6 +1557,8 @@ class PANEL_Poisson(bpy.types.Panel):
         row = layout.row()
         row.operator('heart.cut_edge_loops', text= "Remove edge loops from top position", icon = 'LIBRARY_DATA_OVERRIDE') 
         row = layout.row()
+        row.prop(context.scene, 'remove_basal_threshold', text="Threshold for basal region removal") 
+        row = layout.row()
         row.operator('heart.remove_basal', text= "Remove basal region", icon = 'LIBRARY_DATA_OVERRIDE') 
         row = layout.row()
         layout.operator('heart.poisson', text= "Apply Poisson surface reconstruction", icon = 'PROP_ON')
@@ -1660,6 +1661,8 @@ def register():
     bpy.types.Scene.min_valves = bpy.props.FloatProperty(name="Minimal z-value of valves", default=45)
     bpy.types.Scene.max_apical = bpy.props.FloatProperty(name="Maximal z-value of apical region after cutting", default=40)
     bpy.types.Scene.amount_of_cuts = bpy.props.IntProperty(name="Amount of edge loop cuts from top position", default=10,  min = 2)
+
+    bpy.types.Scene.remove_basal_threshold = bpy.props.IntProperty(name="Threshold for the removal of the basal region.", default=25,  min = 0)
     # Possion algorithm.
     bpy.types.Scene.poisson_depth = bpy.props.IntProperty(name="Depth of possion algorithm", default=10,  min = 1)
     # Aortic valve.
@@ -1674,10 +1677,10 @@ def register():
     bpy.types.Scene.bool_porous = bpy.props.BoolProperty(name="Porous approach for mitral valve?", default = False)
     # Interpolation variables.
     bpy.types.Scene.time_rr = bpy.props.FloatProperty(name="Time RR-duration", default=0.6,  min = 0.01)
-    bpy.types.Scene.time_diastole = bpy.props.FloatProperty(name="Time diastole", default=0.35,  min = 0.01)
+    bpy.types.Scene.time_diastole = bpy.props.FloatProperty(name="Time diastole", default=0.35,  min = 0.01) # !!!Compute automatically using the volumes and rr-duration. Automatische sortierung mit ESV am anfang waere auch gut
     bpy.types.Scene.frames_ventricle = bpy.props.IntProperty(name="Amount of frames ventricle after interpolation", default=10,  min = 10)
     # Connection variable.
-    bpy.types.Scene.inset_faces_refinement_steps = bpy.props.IntProperty(name="Refinement steps when insetting faces in the connection algorithm.", default=1)
+    bpy.types.Scene.inset_faces_refinement_steps = bpy.props.IntProperty(name="Refinement steps when insetting faces in the connection algorithm.", default=1, min=1)
     bpy.types.Scene.connection_twist = bpy.props.IntProperty(name="Twist for bridging algorithm in connection.", default=0)
     # Register UI-classes for Panels and functions.
     for c in classes: bpy.utils.register_class(c)
