@@ -74,6 +74,18 @@ def get_selected_edges(obj):
             active_edges_indices.append(e.index)
     return active_edges_indices, active_edges_verts
 
+def list_diff(list1, list2):
+    """Difference between two lists."""
+    li_dif = [i for i in list1 + list2 if i not in list1 or i not in list2]
+    return li_dif
+
+def transfer_data_to_mesh(obj):
+    """Transfer input object data to mesh and return bmesh object."""
+    bm = bmesh.new()       
+    bm.from_mesh(obj.data)
+    bm.faces.ensure_lookup_table()
+    return bm
+
 # UI-interface functions.
 class MESH_OT_get_node(bpy.types.Operator):
     """Get node position coordinates and save coordinates in UI."""
@@ -207,14 +219,10 @@ def get_neighbour_vertices(v):
 def dissolve_edge_loops(context, obj): 
     """Dissolve a given amount of edge loops."""
     bpy.context.tool_settings.mesh_select_mode = (True, False, False) # Make sure vertex mode is selected in edit mode.
-    # Transfer object in mesh data.
-    bm = bmesh.new()       
-    bm.from_mesh(obj.data)
-    bm.faces.ensure_lookup_table()
+    bm = transfer_data_to_mesh(obj) # Transfer object in mesh data.
     # Initialize neighbour vertices list with a single vertex.
     inner_loop = [] # Inner loop.
     inner_loop.append(context.scene.top_index) # Inner loop starts with the top position vertex.
-
     # Dissolve an amount of edge loops around a selected point.
     for i in range(context.scene.amount_of_cuts + 1):
         outer_loop = [] # Neighbouring loop of the inner loop.
@@ -247,95 +255,107 @@ def dissolve_edge_loops(context, obj):
     for v in obj.data.vertices:
         if v.index in selected_verts: v.select = True
         else: v.select = False
-    subdivide_last_edge_loop() # Apply subdivide to smooth out further connection.
-
-def subdivide_last_edge_loop(): #!!! maybe erweitern durch anzahl subdivisions in abhaengigkeit des verhaeltnisses zwischen der anzahl der oberen apikalen und unteren basalen nodes.
-    """Subdivide last edge loop in two steps before bridging for a better transition between coarse apical and fine basal mesh."""
-    bpy.ops.object.mode_set(mode='EDIT') 
-    bpy.ops.mesh.select_more()
-    bpy.ops.mesh.subdivide(ngon=False)
-    bpy.ops.mesh.select_less()
-    bpy.ops.mesh.select_less()
-    bpy.ops.object.mode_set(mode='OBJECT')
+    #subdivide_last_edge_loop() # Apply subdivide to smooth out further connection.
 
 class MESH_OT_new_remove_basal(bpy.types.Operator): 
     """Remove the basal region using a threshold value."""
     bl_idname = 'heart.remove_basal'
     bl_label = 'Remove basal region.'
     def execute(self, context): 
-        obj = context.active_object
-        remove_basal_region(context, obj)
+        remove_multiple_basal_region(context)
         return{'FINISHED'} 
 
-def remove_basal_region(context, obj): #!!!
+def remove_multiple_basal_region(context):
+    """Remove multiple basal reigons selecting the EDV as the reference element."""
+    obj = context.active_object
+    remove_basal_region(context, obj, []) # Remove from reference object (mean volume should be best)!!!.
+    # Compute volumes
+    # Remove for reference
+    # remove for rest
+
+def remove_basal_region(context, obj, del_nodes): #!!!
     """Remove basal region of the ventricle using a threshold."""
     if obj.mode == 'EDIT': bpy.ops.object.mode_set()
     deselect_object_vertices(obj)
-     # Find vertices to delete (above z-coordinate threshold).
-    deleted_verts = []
+## Select vertices to delete (above z-coordinate threshold).
+    deleted_verts = [] 
     bpy.ops.object.mode_set(mode='OBJECT') 
-    bm = bmesh.new()       
-    bm.from_mesh(obj.data)
-    bm.faces.ensure_lookup_table()
-    for v in bm.verts:
-        vertice_coords = obj.matrix_world @ v.co # Transfer to global coordinate system.
-        if vertice_coords[2] > context.scene.remove_basal_threshold: # Only vertices above threshold are selected to be deleted.
-            v.select = True
-            deleted_verts.append(v.index)
-
-    bm.to_mesh(obj.data) # Transfer selection to object.
-    # Remove vertices below threshold (height-plane).
+    bm = transfer_data_to_mesh(obj) 
+    for v in bm.verts: # Select nodes to be deleted
+        if del_nodes == []: # Select nodes as reference above threshold in z-direction.
+            vertice_coords = obj.matrix_world @ v.co # Transfer to global coordinate system.
+            if vertice_coords[2] > context.scene.remove_basal_threshold: # Only vertices above threshold are selected to be deleted.
+                v.select = True
+                deleted_verts.append(v.index)
+        else: # Select nodes from reference
+            if v.index in del_nodes: v.select = True
+    bm.to_mesh(obj.data) # Update selection to object.
+## Remove selected nodes.
     bpy.ops.object.mode_set(mode='EDIT') 
     bpy.ops.mesh.delete_edgeloop()
     bpy.ops.object.mode_set(mode='OBJECT')
-
-    # Save top edge loop to be selected again later on.
-    bm = bmesh.new()       
-    bm.from_mesh(obj.data)
-    bm.faces.ensure_lookup_table()
+## Save upper apical edge loop in a vertex group to be selected again later on.
+    bm = transfer_data_to_mesh(obj)
     marked_verts = [v.index for v in bm.verts if v.select]
-    # Create vertex group for upper apical edge loop.
     vg_upper_apical = "upper_apical_edge_loop"
-    vg_orifice = obj.vertex_groups.new( name = vg_upper_apical)
+    vg_orifice = obj.vertex_groups.new(name = vg_upper_apical)
     vg_orifice.add(marked_verts, 1, 'ADD' )
-    # Remove remaining face create after delete_edgeloop().
+## Remove remaining face create after delete_edgeloop().
     bpy.ops.object.mode_set(mode='EDIT') 
     bpy.ops.mesh.delete(type='FACE') 
+## Refinement
+    vg_orifice = refine_upper_apical_edge_loop(obj, vg_orifice)
+    smooth_apical_region(context, obj, vg_orifice)
+    return deleted_verts #!!! apply to other ventricles. currently only reference, to do fuer die anderen ventricle
 
-    # Select vertex group.
-    bpy.ops.object.vertex_group_set_active(group=str(vg_upper_apical))
+def refine_upper_apical_edge_loop(obj, vg_orifice):
+    """!!!"""
+    # Select upper apical edge loop with vertex group.
+    bpy.ops.object.vertex_group_set_active(group=vg_orifice.name)
     bpy.ops.object.vertex_group_select()
-    # Smooth highest edge loop of apical region.
-    bpy.ops.mesh.looptools_relax(input='selected', interpolation='linear', iterations='5', regular=True) # Reduce spikes on the highest edge loop
+    # Smooth highest edge loop of apical region aligning the vertices onto a plane. !!! hat noch verbesserungsbedarf. Alle punkte auf einheitliche Hoehe waere gut.
+    bpy.ops.mesh.looptools_relax(input='selected', interpolation='linear', iterations='5', regular=True) # Reduce spikes on the highest edge loop.
     bpy.ops.mesh.looptools_flatten(influence=100, lock_x=False, lock_y=False, lock_z=False, plane='best_fit', restriction='none') # Flatten highest edge loop onto a plane
-
-    subdivide_last_edge_loop()
-
-    # Re-initialize vertex group for lower basal edge loop.
-    bpy.ops.object.mode_set(mode='OBJECT')
-    bm = bmesh.new()       
-    bm.from_mesh(obj.data)
-    bm.faces.ensure_lookup_table()
-    marked_verts = [v.index for v in bm.verts if v.select] # Re-read marked vertices.
-    if vg_upper_apical is not None: obj.vertex_groups.remove(vg_orifice)
-    vg_orifice = obj.vertex_groups.new( name = vg_upper_apical)
-    vg_orifice.add(marked_verts, 1, 'ADD' )
-
-    # Smooth apical region  in the region of the cut.
-    bpy.ops.object.mode_set(mode='EDIT')
-    bpy.ops.object.vertex_group_set_active(group=str(vg_upper_apical))
-
+    # Subdivide last edge loop   
+    # !!! get amount of upper apical and lower basal edge loops to optimize this subdivision
+    return subdivide_last_edge_loop(obj, vg_orifice)
+    
+def subdivide_last_edge_loop(obj, vg_orifice): #!!! maybe erweitern durch anzahl subdivisions in abhaengigkeit des verhaeltnisses zwischen der anzahl der oberen apikalen und unteren basalen nodes.
+    """Subdivide last edge loop in two steps before bridging for a better transition between coarse apical and fine basal mesh."""
+    # Select upper apical edge loop with vertex group.
     deselect_object_vertices(obj)
-    deleted_verts = []
-     # Find vertices to select initially for smoothing.
+    bpy.ops.object.mode_set(mode='EDIT') 
+    bpy.ops.object.vertex_group_set_active(group=vg_orifice.name)
+    bpy.ops.object.vertex_group_select()
+    # Iteratively subdivide edge loop with surrounding mesh creating a less skewed transition between subdivides and unsibdivided elements.
+    bpy.ops.mesh.select_more()
+    bpy.ops.mesh.subdivide(number_cuts=1, ngon=False)
+    bpy.ops.mesh.select_less()
+    bpy.ops.mesh.select_less()
+    bpy.ops.object.mode_set(mode='OBJECT')
+
+    # Re-initialize vertex group for upper apical edge loop.
+    bpy.ops.object.mode_set(mode='OBJECT')
+    bm = transfer_data_to_mesh(obj)
+    selected_verts = [v.index for v in bm.verts if v.select] # Re-read selected vertices.
+    vg_name = vg_orifice.name
+    if vg_orifice is not None: obj.vertex_groups.remove(vg_orifice)
+    vg_orifice = obj.vertex_groups.new(name = vg_name)
+    vg_orifice.add(selected_verts, 1, 'ADD' )
+    return vg_orifice
+
+def smooth_apical_region(context, obj, vg_orifice):
+    """Smooth apical region  in the region of the cut.."""
+    bpy.ops.object.mode_set(mode='EDIT')
+    bpy.ops.object.vertex_group_set_active(group=vg_orifice.name)
+    deselect_object_vertices(obj)
+    # Find vertices to select initially for smoothing.
     bpy.ops.object.mode_set(mode='OBJECT') 
-    bm = bmesh.new()       
-    bm.from_mesh(obj.data)
-    bm.faces.ensure_lookup_table()
-    for v in bm.verts:
+    bm = transfer_data_to_mesh(obj)
+    for v in bm.verts: # Select vertices by z-threshold.
         vertice_coords = obj.matrix_world @ v.co 
         if vertice_coords[2] > 9 / 10 * context.scene.remove_basal_threshold: v.select = True
-    bm.to_mesh(obj.data) # Transfer selection to object .
+    bm.to_mesh(obj.data) # Transfer selection to object.
     bpy.ops.object.mode_set(mode='EDIT') 
     # First strong smoothing operation.
     bpy.ops.object.vertex_group_deselect()
@@ -347,9 +367,6 @@ def remove_basal_region(context, obj): #!!!
         bpy.ops.mesh.vertices_smooth(factor=0.4, repeat=3-i)
     bpy.ops.object.mode_set(mode='OBJECT')
 
-
-    return deleted_verts #!!! apply to other ventricles. currently only reference, to do fuer die anderen ventricle
-    
 class MESH_OT_build_valve(bpy.types.Operator):
     """Create geometry for mitral and aortic valve."""
     bl_idname = 'heart.build_valve'
@@ -403,9 +420,8 @@ def get_min_max(obj):
     """Return smallest and highest value of an object in each dimension."""
     maxim = np.array([-1000.0, -1000.0, -1000.0])
     minim = np.array([1000.0, 1000.0, 1000.0])
-    for p in obj.data.vertices:
-        vertice_coords = obj.matrix_world @ p.co
-        # Find maxima and minima.
+    for p in obj.data.vertices: # Find maxima and minima.
+        vertice_coords = obj.matrix_world @ p.co # Transform to global coordinate system.
         if vertice_coords[0] > maxim[0]: maxim[0] = vertice_coords[0]
         if vertice_coords[0] < minim[0]: minim[0] = vertice_coords[0]
         if vertice_coords[1] > maxim[1]: maxim[1] = vertice_coords[1]
@@ -508,10 +524,7 @@ def create_valve_orifice(context, valve_mode):
     obj = bpy.context.active_object
     if obj.mode == 'EDIT': bpy.ops.object.mode_set() # Toggle to object mode.
     bpy.context.tool_settings.mesh_select_mode = (False, True, False)
-    # Transfer object in mesh data.
-    bm = bmesh.new()       
-    bm.from_mesh(obj.data)
-    bm.faces.ensure_lookup_table()
+    bm = transfer_data_to_mesh(obj)
     vertices_orifice = []
     # Select vertices of newly created face after dissolving.
     for f in bm.faces:
@@ -623,7 +636,6 @@ def smooth_relax_edgeloop(obj, vg_orifice):
     # Change to vert mode and deselect all vertices.
     bm.select_mode = {'VERT'}
     vertices_orifice = [v.index for v in bm.verts if v.select]
-    
     for i in range(5):
         # Select vertices in edge loop with only two connecting vertices.
         for v in bm.verts:
@@ -737,7 +749,7 @@ class MESH_OT_create_basal(bpy.types.Operator):
 def mesh_create_basal(context):
     """Create basal region."""
     cons_print("Create basal regions for selected ventricles...")
-## Error-cases and initialization of reference object.
+    # Error-cases and initialization of reference object.
     if not context.selected_objects:
         cons_print("No elements selected")
         return False
@@ -745,7 +757,7 @@ def mesh_create_basal(context):
     # Find object with mean volume and create a copy of it as a reference object to create the reference basal region from.
     find_reference_ventricle(selected_objects)
     reference_ventricle_name = 'basal_region'
-    reference = selected_objects[bpy.types.Scene.reference_index].name
+    reference = bpy.types.Scene.reference_object_name
     reference_copy = copy_object(reference, reference_ventricle_name)
     # Deselect objects.
     reference_copy.select_set(False)
@@ -772,21 +784,15 @@ def find_reference_ventricle(objects):
     """Find reference object with volume closest to mean volume."""
     # Create list of volumes.
     volumes = []
-    for obj in objects:  
-        # Transfer object into mesh.
-        bm = bmesh.new()       
-        bm.from_mesh(obj.data)
-        bm.faces.ensure_lookup_table()
-        # Compute volume and append it to the volume list.
-        volume = bm.calc_volume(signed=True)
-        volumes.append(volume)
-    # Find ventricle with maximum volume.
     max = 0
-    for counter, vol in enumerate(volumes):
-        if vol > max:
-            max = vol
-            bpy.types.Scene.reference_index = counter
-    return bpy.types.Scene.reference_index
+    for counter, obj in enumerate(objects):  
+        bm = transfer_data_to_mesh(obj)
+        volume = bm.calc_volume(signed=True)# Compute volume and append it to the volume list.
+        if volume > max: # Find ventricle with maximum volume.
+            max = volume
+            bpy.types.Scene.reference_object_name = obj.name
+            cons_print(f"Reference object name: {bpy.types.Scene.reference_object_name}")
+    return bpy.types.Scene.reference_object_name
 
 def find_max_value_after_dissolve(context, objects): #!!! very inefficient currently and useless with new removal of basal region as z_max is known
     """Find the maximal z-value in all ventricle geometries after dissolving"""
@@ -799,7 +805,7 @@ def find_max_value_after_dissolve(context, objects): #!!! very inefficient curre
     for obj in objects: obj.select_set(False)
     for obj in objects_copy: obj.select_set(False)
     context.scene.max_apical = 0 # Reset maximum apical value.
-## Find max value in z-direction.
+    # Find max value in z-direction.
     for obj in objects_copy:
         # Select object,set is as active and deselect all its vertices.
         obj.select_set(True)
@@ -877,9 +883,7 @@ def remove_apical_region(context, obj):
     """Remove the apical ventricle region from the geometry to create solely the basal region used for all timeframes."""
     # Find vertices to delete.
     deselect_object_vertices(obj)
-    bm = bmesh.new()       
-    bm.from_mesh(obj.data)
-    bm.faces.ensure_lookup_table()
+    bm = transfer_data_to_mesh(obj)
     for v in bm.verts:
         vertice_coords = obj.matrix_world @ v.co # Transfer to global coordinates.
         if vertice_coords[2] < context.scene.height_plane: v.select = True # Only vertices below threshold (height-plane) shall be deleted.
@@ -890,9 +894,7 @@ def remove_apical_region(context, obj):
     bpy.ops.mesh.delete_edgeloop()
     bpy.ops.object.mode_set(mode='OBJECT')
     # Save bottom edge loop to be selected again later on.
-    bm = bmesh.new()       
-    bm.from_mesh(obj.data)
-    bm.faces.ensure_lookup_table()
+    bm = transfer_data_to_mesh(obj)
     marked_verts = [v.index for v in bm.verts if v.select] # Saved selected vertices.
     # Create vertex group for lower basal edge loop and add selected vertices to it.
     vg_lower_basal = "lower_basal_edge_loop"
@@ -1040,11 +1042,11 @@ def mesh_connect_apical_and_basal(context):
             bpy.ops.object.vertex_group_set_active(group=str("lower_basal_edge_loop"))
             bpy.ops.object.vertex_group_select()
             bpy.ops.object.mode_set(mode='OBJECT')
-            # Hide current basal region.
+            # Hide current basal region to improve solution speed as Blender does not need to render all objects at the same time.
             curr_basal.select_set(False)
             curr_basal.hide_set(True)
     # Create initial connection using a reference copy.
-    reference = copy_object(selected_objects[bpy.types.Scene.reference_index].name, "reference")
+    reference = copy_object(bpy.types.Scene.reference_object_name, "reference")
     combine_apical_and_basal_region(context, basal_regions, reference, selected_objects)
     return True
 
@@ -1196,9 +1198,7 @@ def smooth_connection_and_basal_region(context, obj):
     """Smooth basal ventricle region excluding the valves."""
     deselect_object_vertices(obj) # Reset node selection.
     # Select all vertices between the lowest valve vertex and the highest basal region vertex.
-    bm = bmesh.new()       
-    bm.from_mesh(obj.data)
-    bm.faces.ensure_lookup_table()
+    bm = transfer_data_to_mesh(obj)
     for v in bm.verts: # Select all vertices above highest apical vertex in z-direction.
         vertex_coords = obj.matrix_world @ v.co 
         if vertex_coords[2] > context.scene.max_apical: v.select = True
@@ -1220,9 +1220,21 @@ def smooth_connection_and_basal_region(context, obj):
     bpy.ops.object.mode_set(mode='OBJECT')
 
 class MESH_OT_Ventricle_Interpolation(bpy.types.Operator): 
+    """Sort ventricles by volume starting with ESV."""
+    bl_idname = 'heart.sort_ventricles'
+    bl_label = 'Sort ventricles by volume starting with ESV.'
+    def execute(self, context):
+        if not sort_ventricles(context, context.selected_objects): return{'CANCELLED'}
+        return{'FINISHED'}
+
+def sort_ventricles(context, selected_objects):
+    """Sort ventricles by volume starting with ESV.# !!! to do"""
+    pass
+
+class MESH_OT_Ventricle_Interpolation(bpy.types.Operator): 
     """Interpolate ventricle geometry to a larger amount of timesteps."""
     bl_idname = 'heart.ventricle_interpolation'
-    bl_label = 'Return volumes of selected objects.'
+    bl_label = 'Interpolate selected objects.'
     def execute(self, context):
         if not interpolate_ventricle(context): return{'CANCELLED'}
         return{'FINISHED'}
@@ -1346,9 +1358,7 @@ def get_volumes(objects):
 def compute_volume_area(obj):
     """Return volume and surface area of object of object."""  
     # Transfer object into mesh.
-    bm = bmesh.new()       
-    bm.from_mesh(obj.data)
-    bm.faces.ensure_lookup_table()
+    bm = transfer_data_to_mesh(obj)
     # Compute volume and surface area.
     volume = bm.calc_volume(signed=True) 
     area = sum(f.calc_area() for f in bm.faces)
@@ -1643,7 +1653,6 @@ def register():
     bpy.types.Scene.pos_bot = bpy.props.FloatVectorProperty(name="Top position", default = (0,0,0))
     bpy.types.Scene.pos_septum = bpy.props.FloatVectorProperty(name="Top position", default = (0,1,0))
     bpy.types.Scene.top_index = bpy.props.IntProperty(name="Index of top position", default = 0)
-    bpy.types.Scene.reference_index = bpy.props.IntProperty(name="Index of reference object in selected objects", default = 0)
     # Cutting plane variables.
     bpy.types.Scene.height_plane = bpy.props.FloatProperty(name="Height(z-value) of intersection plane", default=40,  min = 0.01)
     bpy.types.Scene.min_valves = bpy.props.FloatProperty(name="Minimal z-value of valves", default=45)
@@ -1667,7 +1676,8 @@ def register():
     bpy.types.Scene.time_rr = bpy.props.FloatProperty(name="Time RR-duration", default=0.6,  min = 0.01)
     bpy.types.Scene.time_diastole = bpy.props.FloatProperty(name="Time diastole", default=0.35,  min = 0.01) # !!!Compute automatically using the volumes and rr-duration. Automatische sortierung mit ESV am anfang waere auch gut
     bpy.types.Scene.frames_ventricle = bpy.props.IntProperty(name="Amount of frames ventricle after interpolation", default=10,  min = 10)
-    # Connection variable.
+    # Connection variables.
+    bpy.types.Scene.reference_object_name = bpy.props.StringProperty(name="Name of the reference object", default = "ventricle_0")
     bpy.types.Scene.inset_faces_refinement_steps = bpy.props.IntProperty(name="Refinement steps when insetting faces in the connection algorithm.", default=1, min=1)
     bpy.types.Scene.connection_twist = bpy.props.IntProperty(name="Twist for bridging algorithm in connection.", default=0)
     # Register UI-classes for Panels and functions.
