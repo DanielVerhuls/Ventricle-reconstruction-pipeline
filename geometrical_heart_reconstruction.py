@@ -45,8 +45,7 @@ def deselect_object_vertices(obj):
     me = obj.data
     bpy.ops.object.mode_set(mode='EDIT') 
     bm = bmesh.from_edit_mesh(me)
-    # Change to vert mode and deselect all vertices.
-    bm.select_mode = {'VERT'}
+    # Deselect all vertices.
     for v in bm.verts: v.select = False
     # Return to object mode and update the mesh to the obeject.
     bm.select_flush_mode()   
@@ -210,7 +209,7 @@ def cut_edge_loops(context, selected_objects):
         dissolve_edge_loops(context, obj)
         obj.select_set(False) # Deselect object, after removing basal region.
 
-def get_neighbour_vertices(v):
+def get_neighbour_vertices(v): # !!! can maybe be shortend to one line.
     """Return neighbouring vertices of a vertex."""
     neighbours_index = []
     for e in v.link_edges: neighbours_index.append(e.other_vert(v).index)
@@ -255,7 +254,15 @@ def dissolve_edge_loops(context, obj):
     for v in obj.data.vertices:
         if v.index in selected_verts: v.select = True
         else: v.select = False
-    #subdivide_last_edge_loop() # Apply subdivide to smooth out further connection.
+
+    # Save upper apical edge loop in a vertex group to be selected again later on.
+    bm = transfer_data_to_mesh(obj)
+    marked_verts = [v.index for v in bm.verts if v.select]
+    vg_upper_apical = "upper_apical_edge_loop"
+    vg_orifice = obj.vertex_groups.new(name = vg_upper_apical)
+    vg_orifice.add(marked_verts, 1, 'ADD' )
+
+    subdivide_last_edge_loop(obj, vg_orifice) # Apply subdivide to smooth out further connection.
 
 class MESH_OT_new_remove_basal(bpy.types.Operator): 
     """Remove the basal region using a threshold value."""
@@ -540,8 +547,9 @@ def create_valve_orifice(context, valve_mode):
     # Create vertex group containing orifice edge loop vertices.
     vg_orifice = obj.vertex_groups.new( name = f"{valve_mode}_orifice")
     vg_orifice.add( vertices_orifice, 1, 'ADD')
-    # Remove troubling vertices(vertices with 2 neighbours) in orifice vertex group and smooth this edge loop.
+    # Remove troubling vertices(vertices with 2 neighbours) in (currently selected) orifice vertex group and smooth this edge loop.
     smooth_relax_edgeloop(obj, vg_orifice) 
+    """ !!! funktioniert bei Janas geometrien auch ohne, weil die so groß sind. Vielleicht muss man das mit klappen skalieren.
     # Subdivide for the real mitral valve for a smoother transition.
     if valve_mode == "Mitral" and context.scene.bool_porous: 
         #!!!select more #Smoother mesh transition, subdivide last edge loop
@@ -550,7 +558,7 @@ def create_valve_orifice(context, valve_mode):
         # subdivide
         bpy.ops.object.mode_set(mode='OBJECT')
         vg_orifice.add( vertices_orifice, 1, 'ADD')
-        bpy.ops.object.mode_set(mode='EDIT')
+        bpy.ops.object.mode_set(mode='EDIT')"""
     bpy.ops.object.mode_set(mode='OBJECT')
     return True
 
@@ -629,31 +637,50 @@ def connect_valve_orifice(context, valve_mode, valve_index):
 
 def smooth_relax_edgeloop(obj, vg_orifice):
     """Relax selected edge loop such that vertices with only two edges get deleted before relaxation, because these vertices will create skew triangles, when using the bridge_edgeloop() command."""
+    bpy.ops.object.mode_set(mode='EDIT') 
+    bpy.context.tool_settings.mesh_select_mode = (True, False, False) # Activate edge mode in edit mode.
+    i = 0
+    while select_outside_edge_loop_vertices(obj) and i < 100: # Select vertices with only two neighbours.
+        i = i + 1
+        #select_outside_edge_loop_vertices(obj) # Select vertices with only two neighbours.
+        bpy.ops.object.mode_set(mode='OBJECT') # Update Mehs in Blender.
+        bpy.ops.object.mode_set(mode='EDIT') 
+
+        bpy.ops.mesh.delete(type='VERT') # Remove selected vertices.
+        # Select vertices in vertex group of orifice vertices.
+        bpy.ops.object.vertex_group_set_active(group=str(vg_orifice.name))
+        bpy.ops.object.vertex_group_select()
+
+
+    # Select vertices in vertex group of orifice vertices.
+    bpy.ops.object.mode_set(mode='EDIT') 
+    bpy.ops.object.vertex_group_set_active(group=str(vg_orifice.name))
+    bpy.ops.object.vertex_group_select()
+   
+    # Relax orifice loop to reduce spikes in transition to valve.
+    bpy.ops.mesh.looptools_relax(input='selected', interpolation='linear', iterations='5', regular=True)
+    bpy.context.tool_settings.mesh_select_mode = (True, False, False)
+
+def select_outside_edge_loop_vertices(obj):
+    """Select vertices in an edge loop with two or less neighbours."""
     # Transfer data into edit mode.
     me = obj.data
     bpy.ops.object.mode_set(mode='EDIT') 
     bm = bmesh.from_edit_mesh(me)
-    # Change to vert mode and deselect all vertices.
-    bm.select_mode = {'VERT'}
-    vertices_orifice = [v.index for v in bm.verts if v.select]
-    for i in range(5):
-        # Select vertices in edge loop with only two connecting vertices.
-        for v in bm.verts:
-            neighbours = []
-            for e in v.link_edges:
-                neighbours.append(e.other_vert(v))
-            if len(neighbours) <= 2 and v.index in vertices_orifice: v.select = True
-            else: v.select = False
-        # Return to object mode and update object.
-        bm.select_flush_mode()   
-        me.update()
-        bpy.ops.mesh.delete(type='VERT')
-    # Select vertices in vertex group of orifice vertices.
-    bpy.ops.object.vertex_group_set_active(group=str(vg_orifice.name))
-    bpy.ops.object.vertex_group_select()
-    # Relax orifice loop to reduce spikes in transition to valve.
-    bpy.ops.mesh.looptools_relax(input='selected', interpolation='linear', iterations='1', regular=True)
-    bpy.context.tool_settings.mesh_select_mode = (True, False, False)
+    # Initialize return type
+    must_remove = False
+    # Select vertices in edge loop with only two connecting vertices.
+    for v in bm.verts:
+        if len(get_neighbour_vertices(v)) <= 2 and v.select: #v.index in vertices_orifice: 
+            cons_print(f"Index: {v.index} kommt weg ")
+            v.select = True
+            must_remove = True
+        else: v.select = False
+    # Return to object mode and update the mesh to the obeject.
+    bm.select_flush_mode()   
+    me.update()
+    bpy.ops.object.mode_set(mode='OBJECT') 
+    return must_remove
 
 def build_valve_surface(context, obj, valve_mode, ratio, valve_index):
     """Copy valve object(mitral/aortic), combine it with the active geometry and select only boundary vertices. Boundary_only allows to delete all vertices except the boundary edge loop on the ventricle side."""
@@ -843,8 +870,8 @@ def create_basal_region_for_object(context, reference_copy):
     # Remove apical regions.
     remove_apical_region(context, poisson_basal)
     # Remove nodes in valve areas, insert of interface nodes and smooth the basal region.
-    create_valve_orifice(context, "Aortic")
     create_valve_orifice(context, "Mitral")
+    create_valve_orifice(context, "Aortic")
     basal_regions = insert_valves_into_basal(context, poisson_basal) # Create exact inputs for the valve boundaries and connect it with the remaining basal region.
     smooth_basal_region(context, voxel_size) # Smooth basal region nodes excluding valves and lower edge loop.
     return basal_regions
@@ -1228,12 +1255,11 @@ def sort_ventricles(context, selected_objects):
     """Sort ventricles by volume starting with minimal volume (End-systolic volume)."""
     volumes = get_volumes(selected_objects, True)
     val, idx = min((val, idx) for (idx, val) in enumerate(volumes))
-    cons_print(f"Minimum value of {val} at index {idx}")
     # Free up names by renaming the objects to temporary names.
     for counter, obj in enumerate(selected_objects): obj.name = f"temp_ven_{counter}" 
     # Re-arrange names of ventricles.
     for old_index, obj in enumerate(selected_objects): 
-        if old_index < idx: new_index = old_index - idx + len(volumes)
+        if old_index < idx: new_index = old_index - idx + len(volumes) # If index would go below 0 revert to the other side of the list.
         else:new_index = old_index - idx 
         obj.name = f"ventricle_{new_index}" # Rename selected objects.
 
