@@ -266,9 +266,9 @@ class MESH_OT_new_remove_basal(bpy.types.Operator):
         return{'FINISHED'} 
 
 def remove_multiple_basal_region(context):
-    """Remove multiple basal reigons selecting the EDV as the reference element."""
+    """Remove multiple basal regions selecting the EDV as the reference element."""
     obj = context.active_object
-    remove_basal_region(context, obj, []) # Remove from reference object (mean volume should be best)!!!.
+    deleted_verts = remove_basal_region(context, obj, []) # Remove from reference object (mean volume should be best)!!!.
     # Compute volumes
     # Remove for reference
     # remove for rest
@@ -281,7 +281,7 @@ def remove_basal_region(context, obj, del_nodes): #!!!
     deleted_verts = [] 
     bpy.ops.object.mode_set(mode='OBJECT') 
     bm = transfer_data_to_mesh(obj) 
-    for v in bm.verts: # Select nodes to be deleted
+    for v in bm.verts: # Select nodes to be deleted.
         if del_nodes == []: # Select nodes as reference above threshold in z-direction.
             vertice_coords = obj.matrix_world @ v.co # Transfer to global coordinate system.
             if vertice_coords[2] > context.scene.remove_basal_threshold: # Only vertices above threshold are selected to be deleted.
@@ -755,10 +755,9 @@ def mesh_create_basal(context):
         return False
     selected_objects = context.selected_objects
     # Find object with mean volume and create a copy of it as a reference object to create the reference basal region from.
-    find_reference_ventricle(selected_objects)
+    reference_object_name = find_reference_ventricle(selected_objects)
     reference_ventricle_name = 'basal_region'
-    reference = bpy.types.Scene.reference_object_name
-    reference_copy = copy_object(reference, reference_ventricle_name)
+    reference_copy = copy_object(reference_object_name, reference_ventricle_name)
     # Deselect objects.
     reference_copy.select_set(False)
     for obj in selected_objects: obj.select_set(False)
@@ -781,17 +780,14 @@ def mesh_create_basal(context):
     return basal_regions
 
 def find_reference_ventricle(objects): 
-    """Find reference object with volume closest to mean volume."""
-    # Create list of volumes.
-    volumes = []
+    """Find reference object with max volume !!!closest to mean volume."""
     max = 0
-    for counter, obj in enumerate(objects):  
+    for obj in objects:  
         bm = transfer_data_to_mesh(obj)
         volume = bm.calc_volume(signed=True)# Compute volume and append it to the volume list.
         if volume > max: # Find ventricle with maximum volume.
             max = volume
             bpy.types.Scene.reference_object_name = obj.name
-            cons_print(f"Reference object name: {bpy.types.Scene.reference_object_name}")
     return bpy.types.Scene.reference_object_name
 
 def find_max_value_after_dissolve(context, objects): #!!! very inefficient currently and useless with new removal of basal region as z_max is known
@@ -828,6 +824,7 @@ def create_basal_region_for_object(context, reference_copy):
     reference_copy.select_set(True)
     bpy.context.view_layer.objects.active = reference_copy
     deselect_object_vertices(reference_copy)
+    #remove_basal_region(context, reference_copy, []) # !!!
     dissolve_edge_loops(context, reference_copy) # Function to remove basal region.
     # Add valve and support structure boundary nodes.
     aortic_min, mitral_min = build_both_valves(context, reference_copy, ratio= 1) # Valves have a annuli ratio of 1.
@@ -1219,7 +1216,7 @@ def smooth_connection_and_basal_region(context, obj):
         bpy.ops.mesh.vertices_smooth(factor=0.25, repeat=6-i)
     bpy.ops.object.mode_set(mode='OBJECT')
 
-class MESH_OT_Ventricle_Interpolation(bpy.types.Operator): 
+class MESH_OT_Ventricle_Sort(bpy.types.Operator): 
     """Sort ventricles by volume starting with ESV."""
     bl_idname = 'heart.sort_ventricles'
     bl_label = 'Sort ventricles by volume starting with ESV.'
@@ -1228,8 +1225,17 @@ class MESH_OT_Ventricle_Interpolation(bpy.types.Operator):
         return{'FINISHED'}
 
 def sort_ventricles(context, selected_objects):
-    """Sort ventricles by volume starting with ESV.# !!! to do"""
-    pass
+    """Sort ventricles by volume starting with minimal volume (End-systolic volume)."""
+    volumes = get_volumes(selected_objects, True)
+    val, idx = min((val, idx) for (idx, val) in enumerate(volumes))
+    cons_print(f"Minimum value of {val} at index {idx}")
+    # Free up names by renaming the objects to temporary names.
+    for counter, obj in enumerate(selected_objects): obj.name = f"temp_ven_{counter}" 
+    # Re-arrange names of ventricles.
+    for old_index, obj in enumerate(selected_objects): 
+        if old_index < idx: new_index = old_index - idx + len(volumes)
+        else:new_index = old_index - idx 
+        obj.name = f"ventricle_{new_index}" # Rename selected objects.
 
 class MESH_OT_Ventricle_Interpolation(bpy.types.Operator): 
     """Interpolate ventricle geometry to a larger amount of timesteps."""
@@ -1343,16 +1349,16 @@ class MESH_DEV_volumes(bpy.types.Operator):
     bl_idname = 'heart.dev_volumes'
     bl_label = 'Compute volumes of selected objects.'
     def execute(self, context):
-        get_volumes(bpy.context.selected_objects)
+        get_volumes(bpy.context.selected_objects, True)
         return{'FINISHED'}
 
-def get_volumes(objects):
+def get_volumes(objects, bool_print):
     """Print each volume and surface area of a given list of objects."""
     volumelist = []
     for obj in objects:
         volume, area = compute_volume_area(obj)
         volumelist.append(volume)
-        cons_print(f"{obj.name} with volume: {round(volume/1000, 4)} ml and surface area: {round(area/100, 4)} mm^2.")
+        if bool_print: cons_print(f"{obj.name} with volume: {round(volume/1000, 4)} ml and surface area: {round(area/100, 4)} mm^2.")
     return volumelist
 
 def compute_volume_area(obj):
@@ -1633,6 +1639,8 @@ class PANEL_Dev_tools(bpy.types.Panel):
         row = layout.row()
         layout.operator('heart.dev_volumes', text= "Compute volumes", icon = 'HOME')
         row = layout.row()
+        layout.operator('heart.sort_ventricles', text= "Sort volumes", icon = 'HOME')
+        row = layout.row()
         layout.operator('heart.dev_indices', text= "Get vertex indices", icon = 'THREE_DOTS')
         row = layout.row()
         layout.operator('heart.dev_check_edges', text= "Get edge index", icon = 'ARROW_LEFTRIGHT')
@@ -1643,7 +1651,7 @@ class PANEL_Dev_tools(bpy.types.Panel):
 classes = [
     PANEL_Position_Ventricle,
     PANEL_Interpolation, PANEL_Valves, PANEL_Poisson, PANEL_Objects, PANEL_Reconstruction, PANEL_Setup_Variables,  PANEL_Dev_tools, MESH_OT_get_node, MESH_OT_ventricle_rotate, MESH_OT_poisson, MESH_OT_build_valve, MESH_OT_create_valve_orifice, 
-    MESH_OT_support_struct, MESH_OT_connect_valves, MESH_OT_cut_edge_loops, MESH_OT_Add_Atrium, MESH_OT_Add_Aorta, MESH_OT_Porous_zones, MESH_OT_Quick_Recon, MESH_OT_new_remove_basal,
+    MESH_OT_support_struct, MESH_OT_connect_valves, MESH_OT_cut_edge_loops, MESH_OT_Add_Atrium, MESH_OT_Add_Aorta, MESH_OT_Porous_zones, MESH_OT_Ventricle_Sort, MESH_OT_Quick_Recon, MESH_OT_new_remove_basal,
     MESH_OT_create_basal, MESH_OT_connect_apical_and_basal, MESH_OT_Ventricle_Interpolation, MESH_OT_Add_Vessels_Valves, MESH_DEV_volumes, MESH_DEV_indices, MESH_DEV_edge_index, MESH_DEV_check_node_connectivity,
 ]
   
