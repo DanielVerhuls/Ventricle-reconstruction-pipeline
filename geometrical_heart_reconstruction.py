@@ -639,24 +639,19 @@ def smooth_relax_edgeloop(obj, vg_orifice):
     """Relax selected edge loop such that vertices with only two edges get deleted before relaxation, because these vertices will create skew triangles, when using the bridge_edgeloop() command."""
     bpy.ops.object.mode_set(mode='EDIT') 
     bpy.context.tool_settings.mesh_select_mode = (True, False, False) # Activate edge mode in edit mode.
-    i = 0
+    i = 0 # Breakup-condition for while-loop to prevent infinite loops.
     while select_outside_edge_loop_vertices(obj) and i < 100: # Select vertices with only two neighbours.
         i = i + 1
-        #select_outside_edge_loop_vertices(obj) # Select vertices with only two neighbours.
         bpy.ops.object.mode_set(mode='OBJECT') # Update Mehs in Blender.
         bpy.ops.object.mode_set(mode='EDIT') 
-
         bpy.ops.mesh.delete(type='VERT') # Remove selected vertices.
-        # Select vertices in vertex group of orifice vertices.
+        # Reselect vertices in orifice vertex group.
         bpy.ops.object.vertex_group_set_active(group=str(vg_orifice.name))
         bpy.ops.object.vertex_group_select()
-
-
     # Select vertices in vertex group of orifice vertices.
     bpy.ops.object.mode_set(mode='EDIT') 
     bpy.ops.object.vertex_group_set_active(group=str(vg_orifice.name))
     bpy.ops.object.vertex_group_select()
-   
     # Relax orifice loop to reduce spikes in transition to valve.
     bpy.ops.mesh.looptools_relax(input='selected', interpolation='linear', iterations='5', regular=True)
     bpy.context.tool_settings.mesh_select_mode = (True, False, False)
@@ -672,7 +667,6 @@ def select_outside_edge_loop_vertices(obj):
     # Select vertices in edge loop with only two connecting vertices.
     for v in bm.verts:
         if len(get_neighbour_vertices(v)) <= 2 and v.select: #v.index in vertices_orifice: 
-            cons_print(f"Index: {v.index} kommt weg ")
             v.select = True
             must_remove = True
         else: v.select = False
@@ -861,7 +855,7 @@ def create_basal_region_for_object(context, reference_copy):
     if not compute_height_plane(context): return False # Compute height plane for the removal of the apical region.
     # Poisson with remeshing and triangulation.
     poisson_basal = create_poisson_from_object_pointcloud(context, reference_copy)
-    voxel_size = 0.5
+    voxel_size = min(context.scene.aortic_radius, context.scene.mitral_radius_long, context.scene.mitral_radius_small) / 6 # Compute voxel_size for remesh and merge dependent of the smallest valve size.
     apply_voxel_remesh(voxel_size) # Apply Remesh for better mesh quality (remove small mesh elements with high cell skewness).
     # Triangulate remesh.
     bpy.ops.object.modifier_add(type='TRIANGULATE')
@@ -951,7 +945,7 @@ def insert_valves_into_basal(context, poisson_basal):
         basal_regions.append(curr_basal)
     # Interpolated mitral valve.
     else:
-        # Create reference basal region to get edges connections from.
+        # Create reference basal region to derive node-connectivity in the valve orifice region from.
         bpy.ops.object.mode_set(mode='OBJECT')
         curr_basal = copy_object(poisson_basal.name, f"basal_ref")
         curr_basal.select_set(True)
@@ -1020,7 +1014,7 @@ def smooth_basal_region(context, voxel_size):
     bpy.ops.object.vertex_group_set_active(group=str("Mitral_orifice"))
     bpy.ops.object.vertex_group_deselect()
     # Merge close nodes and smooth them.
-    bpy.ops.mesh.remove_doubles(threshold=voxel_size / 2, use_sharp_edge_from_normals=False, use_unselected=False)
+    if context.scene.bool_porous: bpy.ops.mesh.remove_doubles(threshold=voxel_size / 2, use_sharp_edge_from_normals=False, use_unselected=False)
     bpy.ops.mesh.vertices_smooth(factor=0.75, repeat=10)
     # Deselect valve orifice edge loops for a better smoothing transition between valves and basal region.
     bpy.ops.object.vertex_group_set_active(group=str("Aortic_orifice"))
@@ -1028,7 +1022,7 @@ def smooth_basal_region(context, voxel_size):
     bpy.ops.object.vertex_group_set_active(group=str("Mitral_orifice"))
     bpy.ops.object.vertex_group_select()
     # Merge and smooth again.
-    bpy.ops.mesh.remove_doubles(threshold=voxel_size * 0.85, use_sharp_edge_from_normals=False, use_unselected=False)
+    if context.scene.bool_porous: bpy.ops.mesh.remove_doubles(threshold=voxel_size * 0.85, use_sharp_edge_from_normals=False, use_unselected=False)
     bpy.ops.mesh.vertices_smooth(factor=0.75, repeat=20)     
     bpy.ops.object.mode_set(mode='OBJECT') 
 
@@ -1184,9 +1178,9 @@ def inset_faces_smooth(context):
     distance = context.scene.min_valves - context.scene.max_apical # Distance between lowest valve node and highest apical point of all ventricles after basal removal in z-direction.
     bpy.ops.object.mode_set(mode='EDIT')
     for counter, value in enumerate(range(context.scene.inset_faces_refinement_steps)):
-        inset_thickness = distance / 4**(counter+1) # Reduce the offset between newly added edge_loops by the factor 4.
+        inset_thickness = distance / (2 * 2**(counter)) # Reduce the offset between newly added edge_loops by the factor 4.
         bpy.ops.mesh.inset(thickness= inset_thickness, depth=0, use_select_inset=True) # Insert faces along the bridge between apical and basal.
-        bpy.ops.mesh.vertices_smooth(factor=0.5, repeat=context.scene.inset_faces_refinement_steps+3-counter)  # Smooth connection between apical and basal region including the newly added faces.
+        bpy.ops.mesh.vertices_smooth(factor=0.5, repeat=1 + counter)  # Smooth connection between apical and basal region including the newly added faces.
     bpy.ops.object.mode_set(mode='OBJECT')
   
 def triangulate_connection(bool_ref, obj, ref_edge_indices):
@@ -1240,7 +1234,7 @@ def smooth_connection_and_basal_region(context, obj):
         bpy.ops.object.vertex_group_set_active(group=str("MV"))
         bpy.ops.object.vertex_group_deselect()
         # Continuously weaker smoothing. As hard smoothing creates kinks between smoothed nodes and unsmoothed nodes.
-        bpy.ops.mesh.vertices_smooth(factor=0.25, repeat=6-i)
+        bpy.ops.mesh.vertices_smooth(factor=0.5, repeat=6-i)
     bpy.ops.object.mode_set(mode='OBJECT')
 
 class MESH_OT_Ventricle_Sort(bpy.types.Operator): 
@@ -1413,7 +1407,7 @@ def get_selected_objects_vertices(context):
     for v in bm.verts:
         if v.select:
             vertice_coords = obj.matrix_world @ v.co # Transform to global coordinate system.
-            cons_print(f"Vertex {v.index} at ({round(vertice_coords.x, 2)},{round(vertice_coords.y, 2)},{round(vertice_coords.z, 2)})")
+            cons_print(f"Vertex {v.index} at ({round(vertice_coords.x, 2)}|{round(vertice_coords.y, 2)}|{round(vertice_coords.z, 2)})")
             verts.append(v)
     cons_print(f"Amount of selected vertices: {len(verts)}")
     return verts
@@ -1436,7 +1430,7 @@ def check_edge(context):
     verts = [v for v in bm.verts if v.select] # Get selected vertices.
     # Only two vertices may be selected.
     if len(verts) != 2:
-        cons_print(f"Select exactly 2 vertices.")
+        cons_print(f"Select exactly two vertices.")
         return False
     # Check edge connectivity between vertices and print out result.
     V1 = verts[0] # Define vertices one and two.
@@ -1462,6 +1456,7 @@ def check_node_connectivity(context):
     for i, obj in enumerate(context.selected_objects):
     # Initialize the list of vertices, edges and faces each with their respective connecting vertices.
         if i == 0:
+            cons_print(f"Initial object: {obj.name}")
             for v in obj.data.vertices: vertices.append(v.index)
             for e in obj.data.edges: edges.append([e.index, e.vertices[0] , e.vertices[1]])
             for f in obj.data.polygons: faces.append([f.index, f.vertices[0], f.vertices[1], f.vertices[2]])
@@ -1483,7 +1478,8 @@ def check_node_connectivity(context):
             # Faces-connectivity check.
             for counter, f in enumerate(obj.data.polygons):
                 if not (faces[counter][0] == f.index and faces[counter][1]== f.vertices[0] and faces[counter][2] ==  f.vertices[1] and faces[counter][3] ==  f.vertices[2]):
-                    cons_print(f"Face mismatch in object: {obj.name} at face {f.index} with face-center at {f.center}.") #!!! Anzeige wo das kaputte face ist
+                    cons_print(f"Face mismatch in object: {obj.name} at face {f.index} with face-center at {f.center}.") 
+                    f.select = True
                     return False
             # Edge-connectivity check.
             for counter, e in enumerate(obj.data.edges):
