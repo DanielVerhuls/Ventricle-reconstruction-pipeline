@@ -274,30 +274,48 @@ class MESH_OT_new_remove_basal(bpy.types.Operator):
 
 def remove_multiple_basal_region(context):
     """Remove multiple basal regions selecting the EDV as the reference element."""
-    obj = context.active_object
-    deleted_verts = remove_basal_region(context, obj, []) # Remove from reference object (mean volume should be best)!!!.
+    cons_print(f"Removing original basal region.")
+    # Read selected objects.
+    if not context.selected_objects:
+        cons_print("No elements selected.")
+        return False
+    selected_objects = context.selected_objects
+    # Find object with max volume and create a copy of it as a reference object.
+    reference_copy = copy_object(find_reference_ventricle_name(selected_objects), 'basal_region')
+    # Deselect objects.
+    for obj in selected_objects: obj.select_set(False)
+
+    deleted_verts = remove_basal_region(context, reference_copy, []) # Remove from reference object
+    cons_print(f"Deleted verts: {deleted_verts}")
+
+    for obj in selected_objects: remove_basal_region(context, obj, deleted_verts) # Remove from reference object (mean volume should be best)!!!.
     # Compute volumes
     # Remove for reference
     # remove for rest
 
 def remove_basal_region(context, obj, del_nodes): #!!!
     """Remove basal region of the ventricle using a threshold."""
-    if obj.mode == 'EDIT': bpy.ops.object.mode_set()
+    if obj.mode == 'EDIT': bpy.ops.object.mode_set(mode='OBJECT') # Toggle to object mode.
+    obj.select_set(True)
+    bpy.context.view_layer.objects.active = obj
     deselect_object_vertices(obj)
+    
 ## Select vertices to delete (above z-coordinate threshold).
-    deleted_verts = [] 
-    bpy.ops.object.mode_set(mode='OBJECT') 
     bm = transfer_data_to_mesh(obj) 
-    for v in bm.verts: # Select nodes to be deleted.
-        if del_nodes == []: # Select nodes as reference above threshold in z-direction.
+    cons_print(f"Length bm.verts: {len(bm.verts)}")
+    if del_nodes == []: # Initialisation of deleted node selection for reference object.
+        for v in bm.verts:
             vertice_coords = obj.matrix_world @ v.co # Transfer to global coordinate system.
+            
             if vertice_coords[2] > context.scene.remove_basal_threshold: # Only vertices above threshold are selected to be deleted.
                 v.select = True
-                deleted_verts.append(v.index)
-        else: # Select nodes from reference
+                del_nodes.append(v.index)
+                cons_print(f"Vertex: {v.index} at ({round(vertice_coords[0],2)}|{round(vertice_coords[1],2)}|{round(vertice_coords[2],2)})")
+    else:
+        for v in bm.verts:
             if v.index in del_nodes: v.select = True
     bm.to_mesh(obj.data) # Update selection to object.
-## Remove selected nodes.
+    ## Remove selected nodes.
     bpy.ops.object.mode_set(mode='EDIT') 
     bpy.ops.mesh.delete_edgeloop()
     bpy.ops.object.mode_set(mode='OBJECT')
@@ -313,7 +331,7 @@ def remove_basal_region(context, obj, del_nodes): #!!!
 ## Refinement
     vg_orifice = refine_upper_apical_edge_loop(obj, vg_orifice)
     smooth_apical_region(context, obj, vg_orifice)
-    return deleted_verts #!!! apply to other ventricles. currently only reference, to do fuer die anderen ventricle
+    return del_nodes #!!! apply to other ventricles. currently only reference, to do fuer die anderen ventricle
 
 def refine_upper_apical_edge_loop(obj, vg_orifice):
     """!!!"""
@@ -340,7 +358,6 @@ def subdivide_last_edge_loop(obj, vg_orifice): #!!! maybe erweitern durch anzahl
     bpy.ops.mesh.select_less()
     bpy.ops.mesh.select_less()
     bpy.ops.object.mode_set(mode='OBJECT')
-
     # Re-initialize vertex group for upper apical edge loop.
     bpy.ops.object.mode_set(mode='OBJECT')
     bm = transfer_data_to_mesh(obj)
@@ -640,7 +657,7 @@ def smooth_relax_edgeloop(obj, vg_orifice):
     bpy.ops.object.mode_set(mode='EDIT') 
     bpy.context.tool_settings.mesh_select_mode = (True, False, False) # Activate edge mode in edit mode.
     i = 0 # Breakup-condition for while-loop to prevent infinite loops.
-    while select_outside_edge_loop_vertices(obj) and i < 100: # Select vertices with only two neighbours.
+    while select_vertices_outside_of_edge_loop(obj) and i < 100: # Select vertices with only two neighbours.
         i = i + 1
         bpy.ops.object.mode_set(mode='OBJECT') # Update Mehs in Blender.
         bpy.ops.object.mode_set(mode='EDIT') 
@@ -656,7 +673,7 @@ def smooth_relax_edgeloop(obj, vg_orifice):
     bpy.ops.mesh.looptools_relax(input='selected', interpolation='linear', iterations='5', regular=True)
     bpy.context.tool_settings.mesh_select_mode = (True, False, False)
 
-def select_outside_edge_loop_vertices(obj):
+def select_vertices_outside_of_edge_loop(obj):
     """Select vertices in an edge loop with two or less neighbours."""
     # Transfer data into edit mode.
     me = obj.data
@@ -766,19 +783,17 @@ class MESH_OT_create_basal(bpy.types.Operator):
     def execute(self, context):
         if not mesh_create_basal(context): return{'CANCELLED'}
         return{'FINISHED'} 
-    
+
 def mesh_create_basal(context):
     """Create basal region."""
     cons_print("Create basal regions for selected ventricles...")
-    # Error-cases and initialization of reference object.
+    # Read selected objects.
     if not context.selected_objects:
-        cons_print("No elements selected")
+        cons_print("No elements selected.")
         return False
     selected_objects = context.selected_objects
     # Find object with mean volume and create a copy of it as a reference object to create the reference basal region from.
-    reference_object_name = find_reference_ventricle(selected_objects)
-    reference_ventricle_name = 'basal_region'
-    reference_copy = copy_object(reference_object_name, reference_ventricle_name)
+    reference_copy = copy_object(find_reference_ventricle_name(selected_objects), 'basal_region')
     # Deselect objects.
     reference_copy.select_set(False)
     for obj in selected_objects: obj.select_set(False)
@@ -800,8 +815,8 @@ def mesh_create_basal(context):
     bpy.data.objects.remove(bpy.data.objects["basal_region_poisson"], do_unlink=True)
     return basal_regions
 
-def find_reference_ventricle(objects): 
-    """Find reference object with max volume !!!closest to mean volume."""
+def find_reference_ventricle_name(objects): 
+    """Find reference object with max volume and return its name."""
     max = 0
     for obj in objects:  
         bm = transfer_data_to_mesh(obj)
@@ -1474,17 +1489,20 @@ def check_node_connectivity(context):
             if len(obj.data.polygons) != len(faces):
                 cons_print(f"Object: {obj.name} has mismatching amount of faces.")
                 return False
-    # Connectivity checks.  !!! Hier koennte man bei fehlermeldung das inkorrekte edge/face markieren(select) in edit mode
-            # Faces-connectivity check.
+    # Connectivity checks. 
+            # Face-connectivity check.
             for counter, f in enumerate(obj.data.polygons):
                 if not (faces[counter][0] == f.index and faces[counter][1]== f.vertices[0] and faces[counter][2] ==  f.vertices[1] and faces[counter][3] ==  f.vertices[2]):
                     cons_print(f"Face mismatch in object: {obj.name} at face {f.index} with face-center at {f.center}.") 
-                    f.select = True
+                    deselect_object_vertices(obj)
+                    f.select = True # Select problematic face.
                     return False
             # Edge-connectivity check.
             for counter, e in enumerate(obj.data.edges):
                 if not (edges[counter][0] == e.index and edges[counter][1]== e.vertices[0] and edges[counter][2] ==  e.vertices[1]):
-                    cons_print(f"Edge mismatch in object: {obj.name} at edge {e.index}.") # !!! anzeige des edge mismatch
+                    cons_print(f"Edge mismatch in object: {obj.name} at edge {e.index}.")
+                    deselect_object_vertices(obj)
+                    e.select = True # Select problematic edge.
                     return False  
     cons_print("Node-connectivity matched for all selected elements.")
     return True
