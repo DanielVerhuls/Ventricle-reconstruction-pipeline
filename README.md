@@ -1,4 +1,4 @@
-# Masterarbeit_Daniel
+# Geometric ventricle reconstruction Pipeline
 
 
 
