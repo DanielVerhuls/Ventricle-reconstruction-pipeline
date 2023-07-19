@@ -264,7 +264,7 @@ def dissolve_edge_loops(context, obj):
 
     subdivide_last_edge_loop(obj, vg_orifice) # Apply subdivide to smooth out further connection.
 
-class MESH_OT_new_remove_basal(bpy.types.Operator): 
+class MESH_OT_remove_basal(bpy.types.Operator): 
     """Remove the basal region using a threshold value."""
     bl_idname = 'heart.remove_basal'
     bl_label = 'Remove basal region.'
@@ -275,23 +275,19 @@ class MESH_OT_new_remove_basal(bpy.types.Operator):
 def remove_multiple_basal_region(context):
     """Remove multiple basal regions selecting the EDV as the reference element."""
     cons_print(f"Removing original basal region.")
-    # Read selected objects.
+    # Setup objects before basal region removal.
     if not context.selected_objects:
         cons_print("No elements selected.")
         return False
     selected_objects = context.selected_objects
-    # Find object with max volume and create a copy of it as a reference object.
-    reference_copy = copy_object(find_reference_ventricle_name(selected_objects), 'basal_region')
-    # Deselect objects.
-    for obj in selected_objects: obj.select_set(False)
-
-    deleted_verts = remove_basal_region(context, reference_copy, []) # Remove from reference object
-    cons_print(f"Deleted verts: {deleted_verts}")
-
+    reference_copy = copy_object(find_reference_ventricle_name(selected_objects), 'reference') # Find object with max volume and create a copy of it as a reference object.
+    for obj in selected_objects: obj.select_set(False) # Deselect objects.
+    # Basal region removal. First for reference, then remaining objects.
+    deleted_verts = remove_basal_region(context, reference_copy, []) # Remove in reference object
     for obj in selected_objects: remove_basal_region(context, obj, deleted_verts) # Remove from reference object (mean volume should be best)!!!.
-    # Compute volumes
-    # Remove for reference
-    # remove for rest
+    # Cleanup.
+    for obj in selected_objects: obj.select_set(True) # Reselect objects from original selection after main operations are executed.
+    bpy.data.objects.remove(bpy.data.objects["reference"], do_unlink=True) # Remove reference object.
 
 def remove_basal_region(context, obj, del_nodes): #!!!
     """Remove basal region of the ventricle using a threshold."""
@@ -299,18 +295,14 @@ def remove_basal_region(context, obj, del_nodes): #!!!
     obj.select_set(True)
     bpy.context.view_layer.objects.active = obj
     deselect_object_vertices(obj)
-    
 ## Select vertices to delete (above z-coordinate threshold).
     bm = transfer_data_to_mesh(obj) 
-    cons_print(f"Length bm.verts: {len(bm.verts)}")
     if del_nodes == []: # Initialisation of deleted node selection for reference object.
         for v in bm.verts:
             vertice_coords = obj.matrix_world @ v.co # Transfer to global coordinate system.
-            
             if vertice_coords[2] > context.scene.remove_basal_threshold: # Only vertices above threshold are selected to be deleted.
                 v.select = True
                 del_nodes.append(v.index)
-                cons_print(f"Vertex: {v.index} at ({round(vertice_coords[0],2)}|{round(vertice_coords[1],2)}|{round(vertice_coords[2],2)})")
     else:
         for v in bm.verts:
             if v.index in del_nodes: v.select = True
@@ -330,11 +322,14 @@ def remove_basal_region(context, obj, del_nodes): #!!!
     bpy.ops.mesh.delete(type='FACE') 
 ## Refinement
     vg_orifice = refine_upper_apical_edge_loop(obj, vg_orifice)
-    smooth_apical_region(context, obj, vg_orifice)
+    # !!! move ventricle up longitudinally
+    #smooth_apical_region(context, obj, vg_orifice)
+## Close function.
+    obj.select_set(False)
     return del_nodes #!!! apply to other ventricles. currently only reference, to do fuer die anderen ventricle
 
 def refine_upper_apical_edge_loop(obj, vg_orifice):
-    """!!!"""
+    """Flatten the upper apical edge loop."""
     # Select upper apical edge loop with vertex group.
     bpy.ops.object.vertex_group_set_active(group=vg_orifice.name)
     bpy.ops.object.vertex_group_select()
@@ -345,7 +340,7 @@ def refine_upper_apical_edge_loop(obj, vg_orifice):
     # !!! get amount of upper apical and lower basal edge loops to optimize this subdivision
     return subdivide_last_edge_loop(obj, vg_orifice)
     
-def subdivide_last_edge_loop(obj, vg_orifice): #!!! maybe erweitern durch anzahl subdivisions in abhaengigkeit des verhaeltnisses zwischen der anzahl der oberen apikalen und unteren basalen nodes.
+def subdivide_last_edge_loop(obj, vg_orifice):
     """Subdivide last edge loop in two steps before bridging for a better transition between coarse apical and fine basal mesh."""
     # Select upper apical edge loop with vertex group.
     deselect_object_vertices(obj)
@@ -369,7 +364,7 @@ def subdivide_last_edge_loop(obj, vg_orifice): #!!! maybe erweitern durch anzahl
     return vg_orifice
 
 def smooth_apical_region(context, obj, vg_orifice):
-    """Smooth apical region  in the region of the cut.."""
+    """Smooth apical region in the region of the cut."""
     bpy.ops.object.mode_set(mode='EDIT')
     bpy.ops.object.vertex_group_set_active(group=vg_orifice.name)
     deselect_object_vertices(obj)
@@ -781,8 +776,38 @@ class MESH_OT_create_basal(bpy.types.Operator):
     bl_idname = 'heart.create_basal'
     bl_label = 'Create basal region of ventricle using the position and angles of the heart valves.'
     def execute(self, context):
-        if not mesh_create_basal(context): return{'CANCELLED'}
+        if not mesh_new_create_basal(context): return{'CANCELLED'}
         return{'FINISHED'} 
+
+def mesh_new_create_basal(context):
+    """Create basal region."""
+    cons_print("Create basal regions for selected ventricles...")
+    # Read selected objects.
+    if not context.selected_objects:
+        cons_print("No elements selected.")
+        return False
+    selected_objects = context.selected_objects
+    # Find object with mean volume and create a copy of it as a reference object to create the reference basal region from.
+    reference_copy = copy_object(find_reference_ventricle_name(selected_objects), 'basal_region')
+    # Deselect objects.
+    reference_copy.select_set(False)
+    for obj in selected_objects: obj.select_set(False)
+    # Operations to create basal region of the ventricle.
+    basal_regions = create_basal_region_for_object(context, reference_copy)
+    if not basal_regions: 
+        cons_print(f"Error during the creation of the basal regions.")
+        return False # If an error ocurred during creation of basal region, dont continue.
+    # Cleanup.
+    # Reselect objects to state previous to this operation and deselect (and hide for performance) created objects.
+    for obj in selected_objects: obj.select_set(True)
+    for basal in basal_regions: 
+        basal.select_set(False)
+        basal.hide_set(True)
+    # Remove old basal region objects.
+    if not context.scene.bool_porous: bpy.data.objects.remove(bpy.data.objects["basal_ref"], do_unlink=True)
+    bpy.data.objects.remove(bpy.data.objects["basal_region"], do_unlink=True)
+    bpy.data.objects.remove(bpy.data.objects["basal_region_poisson"], do_unlink=True)
+    return basal_regions
 
 def mesh_create_basal(context):
     """Create basal region."""
@@ -802,7 +827,9 @@ def mesh_create_basal(context):
     find_max_value_after_dissolve(context, selected_objects)
     # Create basal region:
     basal_regions = create_basal_region_for_object(context, reference_copy)
-    if not basal_regions: return False # If an error ocurred during creation of basal region, dont continue.
+    if not basal_regions: 
+        cons_print(f"Error during the creation of the basal regions.")
+        return False # If an error ocurred during creation of basal region, dont continue.
     # Cleanup.
     # Reselect objects to state previous to this operation and deselect (and hide for performance) created objects.
     for obj in selected_objects: obj.select_set(True)
@@ -1471,7 +1498,6 @@ def check_node_connectivity(context):
     for i, obj in enumerate(context.selected_objects):
     # Initialize the list of vertices, edges and faces each with their respective connecting vertices.
         if i == 0:
-            cons_print(f"Initial object: {obj.name}")
             for v in obj.data.vertices: vertices.append(v.index)
             for e in obj.data.edges: edges.append([e.index, e.vertices[0] , e.vertices[1]])
             for f in obj.data.polygons: faces.append([f.index, f.vertices[0], f.vertices[1], f.vertices[2]])
@@ -1504,7 +1530,7 @@ def check_node_connectivity(context):
                     deselect_object_vertices(obj)
                     e.select = True # Select problematic edge.
                     return False  
-    cons_print("Node-connectivity matched for all selected elements.")
+    cons_print(f"Node-connectivity matched for all {len(context.selected_objects)} selected elements.")
     return True
 
 class PANEL_Position_Ventricle(bpy.types.Panel):
@@ -1535,22 +1561,6 @@ class PANEL_Position_Ventricle(bpy.types.Panel):
         row.label(text= "Rotation and cutting") 
         row = layout.row()
         layout.operator('heart.ventricle_rotate', text= "Translate and rotate", icon = 'CON_ROTLIKE')
-
-class PANEL_Interpolation(bpy.types.Panel):
-    bl_label = "Interpolation"
-    bl_idname = "PT_Interpolation"
-    bl_space_type = 'VIEW_3D'
-    bl_region_type = 'UI'
-    bl_category = 'Herz'
-    bl_option = {'DEFALUT_CLOSED'}
-    def draw(self, context):
-        layout = self.layout
-        row = layout.row()
-        row.prop(context.scene, 'time_rr', text="Time RR-duration") 
-        row = layout.row()
-        row.prop(context.scene, 'time_diastole', text="Time diastole") 
-        row = layout.row()
-        layout.operator('heart.ventricle_interpolation', text= "Interpolate ventricle", icon = 'IPO_EASE_IN')
 
 class PANEL_Valves(bpy.types.Panel):
     bl_label = "Valve options"
@@ -1628,6 +1638,10 @@ class PANEL_Setup_Variables(bpy.types.Panel):
         layout.prop(context.scene, "inset_faces_refinement_steps", text="Refinement steps for insetting faces.")
         row = layout.row()
         layout.prop(context.scene, "connection_twist", text="Twist during connecting algorithm")
+        row = layout.row()
+        row.prop(context.scene, 'time_rr', text="Time RR-duration") 
+        row = layout.row()
+        row.prop(context.scene, 'time_diastole', text="Time diastole") 
 
 class PANEL_Objects(bpy.types.Panel):
     bl_label = "Surrounding objects"
@@ -1666,6 +1680,37 @@ class PANEL_Reconstruction(bpy.types.Panel):
         layout.operator('heart.add_vessels_valves', text= "Add atrium, aorta and valves", icon = 'HANDLE_AUTO')
         row = layout.row()
         layout.operator('heart.quick_recon', text= "Quick reconstruction", icon = 'HEART')
+        row = layout.row()
+        
+class PANEL_Pipeline(bpy.types.Panel):
+    bl_label = "Geometric ventricle reconstruction pipeline"
+    bl_idname = "PT_Pipeline"
+    bl_space_type = 'VIEW_3D'
+    bl_region_type = 'UI'
+    bl_category = 'Herz'
+    bl_option = {'DEFALUT_CLOSED'}
+    def draw(self, context):
+        layout = self.layout
+        row = layout.row()
+        layout.operator('heart.sort_ventricles', text= "Sort volumes", icon = 'HOME')
+        row = layout.row()
+        row.label(text= "Setup rotation and translation") #!!! als button der diesen reiter oeffnet
+        row = layout.row()
+        layout.operator('heart.ventricle_interpolation', text= "Interpolate ventricle", icon = 'IPO_EASE_IN')
+        row = layout.row()
+        row.label(text= "Setup valves") #!!! als button der diesen reiter oeffnet
+        row = layout.row()
+        row.label(text= "Setup other variables(RR-duration, und algorithm parameters-> sollte aus sort errechnet werden)") #!!! als button der diesen reiter oeffnet
+        row = layout.row()
+        row.operator('heart.remove_basal', text= "Remove basal region", icon = 'LIBRARY_DATA_OVERRIDE')  
+        row = layout.row()
+        layout.operator('heart.create_basal', text= "Create basal region", icon = 'SPHERECURVE')
+        row = layout.row()
+        row.label(text= "Connect apical and basal regions") 
+        row = layout.row()
+        layout.operator('heart.add_vessels_valves', text= "Add atrium, aorta and valves", icon = 'HANDLE_AUTO')
+        row = layout.row()
+        row.label(text= "Quick reconstruction") 
 
 class PANEL_Dev_tools(bpy.types.Panel):
     bl_label = "Development tools"
@@ -1679,8 +1724,6 @@ class PANEL_Dev_tools(bpy.types.Panel):
         row = layout.row()
         layout.operator('heart.dev_volumes', text= "Compute volumes", icon = 'HOME')
         row = layout.row()
-        layout.operator('heart.sort_ventricles', text= "Sort volumes", icon = 'HOME')
-        row = layout.row()
         layout.operator('heart.dev_indices', text= "Get vertex indices", icon = 'THREE_DOTS')
         row = layout.row()
         layout.operator('heart.dev_check_edges', text= "Get edge index", icon = 'ARROW_LEFTRIGHT')
@@ -1690,8 +1733,8 @@ class PANEL_Dev_tools(bpy.types.Panel):
 
 classes = [
     PANEL_Position_Ventricle,
-    PANEL_Interpolation, PANEL_Valves, PANEL_Poisson, PANEL_Objects, PANEL_Reconstruction, PANEL_Setup_Variables,  PANEL_Dev_tools, MESH_OT_get_node, MESH_OT_ventricle_rotate, MESH_OT_poisson, MESH_OT_build_valve, MESH_OT_create_valve_orifice, 
-    MESH_OT_support_struct, MESH_OT_connect_valves, MESH_OT_cut_edge_loops, MESH_OT_Add_Atrium, MESH_OT_Add_Aorta, MESH_OT_Porous_zones, MESH_OT_Ventricle_Sort, MESH_OT_Quick_Recon, MESH_OT_new_remove_basal,
+    PANEL_Valves, PANEL_Poisson, PANEL_Objects, PANEL_Reconstruction, PANEL_Pipeline, PANEL_Setup_Variables,  PANEL_Dev_tools, MESH_OT_get_node, MESH_OT_ventricle_rotate, MESH_OT_poisson, MESH_OT_build_valve, MESH_OT_create_valve_orifice, 
+    MESH_OT_support_struct, MESH_OT_connect_valves, MESH_OT_cut_edge_loops, MESH_OT_Add_Atrium, MESH_OT_Add_Aorta, MESH_OT_Porous_zones, MESH_OT_Ventricle_Sort, MESH_OT_Quick_Recon, MESH_OT_remove_basal,
     MESH_OT_create_basal, MESH_OT_connect_apical_and_basal, MESH_OT_Ventricle_Interpolation, MESH_OT_Add_Vessels_Valves, MESH_DEV_volumes, MESH_DEV_indices, MESH_DEV_edge_index, MESH_DEV_check_node_connectivity,
 ]
   

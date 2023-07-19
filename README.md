@@ -1,4 +1,4 @@
-# Geometric ventricle reconstruction Pipeline
+# Geometric-ventricle-reconstruction Pipeline
 
 
 
