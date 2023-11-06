@@ -1,7 +1,7 @@
 bl_info = {
     "name" : "Geometrical heart reconstrucion", 
     "author" : "Daniel Verhuelsdonk",
-    "version" : (1, 24),
+    "version" : (1, 271),
     "blender" : (3, 1, 0),
     "location" : "Operator Search",
     "description": "Panel and operators to geometrically reconstruct the upper heart shape",
@@ -1653,8 +1653,6 @@ class PANEL_Poisson(bpy.types.Panel):
         row = layout.row()
         row.operator('heart.cut_edge_loops', text= "Remove edge loops from top position", icon = 'LIBRARY_DATA_OVERRIDE') 
         row = layout.row()
-        row.prop(context.scene, 'remove_basal_threshold', text="Threshold for basal region removal") 
-        row = layout.row()
         row.operator('heart.remove_basal', text= "Remove basal region", icon = 'LIBRARY_DATA_OVERRIDE') 
         row = layout.row()
         layout.operator('heart.poisson', text= "Apply Poisson surface reconstruction", icon = 'PROP_ON')
@@ -1674,6 +1672,8 @@ class PANEL_Setup_Variables(bpy.types.Panel):
         layout = self.layout
         row = layout.row()
         row.prop(context.scene, 'amount_of_cuts', text="Amount of cut edge loops")  
+        row = layout.row()
+        row.prop(context.scene, 'remove_basal_threshold', text="Threshold for basal region removal") 
         row = layout.row()
         row.prop(context.scene, 'poisson_depth', text="Depth of poisson reconstruction algorithm") 
         row = layout.row()
