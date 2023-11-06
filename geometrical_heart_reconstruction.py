@@ -1,7 +1,7 @@
 bl_info = {
     "name" : "Geometrical heart reconstrucion", 
     "author" : "Daniel Verhuelsdonk",
-    "version" : (1, 23),
+    "version" : (1, 24),
     "blender" : (3, 1, 0),
     "location" : "Operator Search",
     "description": "Panel and operators to geometrically reconstruct the upper heart shape",
@@ -769,7 +769,8 @@ class MESH_OT_create_basal(bpy.types.Operator):
     bl_idname = 'heart.create_basal'
     bl_label = 'Create basal region of ventricle using the position and angles of the heart valves.'
     def execute(self, context):
-        if not mesh_new_create_basal(context): return{'CANCELLED'}
+        if not mesh_create_basal(context): return{'CANCELLED'}
+        #if not mesh_new_create_basal(context): return{'CANCELLED'}
         return{'FINISHED'} 
 
 def mesh_new_create_basal(context):
@@ -818,6 +819,7 @@ def mesh_create_basal(context): #!!! old, deprecated
     # Operations to create basal region of the ventricle containing valve orifices.
     # Find the largest z-value in all dissolved ventricle geometries.
     find_max_value_after_dissolve(context, selected_objects)
+    cons_print(f"Max apical: {context.scene.max_apical}")
     # Create basal region:
     basal_regions = create_basal_region_for_object(context, reference_copy)
     if not basal_regions: 
@@ -867,7 +869,10 @@ def find_max_value_after_dissolve(context, objects): #!!! very inefficient curre
         dissolve_edge_loops(context, obj)
         # Find the largest z-value in the vertices of the current object.
         max_val, min_val = get_min_max(obj)
+        cons_print(f"max_val: {max_val[2]}")
+        cons_print(f"context.scene.max_apical: {context.scene.max_apical}")
         if max_val[2] > context.scene.max_apical: 
+            cons_print(f"geaendert!!!!")
             context.scene.max_apical = max_val[2]
         obj.select_set(False)
     # Remove list of copied objects after finding the maximum.
@@ -1792,7 +1797,7 @@ def register():
     # Cutting plane variables.
     bpy.types.Scene.height_plane = bpy.props.FloatProperty(name="Height(z-value) of intersection plane", default=40,  min = 0.01)
     bpy.types.Scene.min_valves = bpy.props.FloatProperty(name="Minimal z-value of valves", default=45)
-    bpy.types.Scene.max_apical = bpy.props.FloatProperty(name="Maximal z-value of apical region after cutting", default=40)
+    bpy.types.Scene.max_apical = bpy.props.FloatProperty(name="Maximal z-value of apical region after cutting", default=20)
     bpy.types.Scene.amount_of_cuts = bpy.props.IntProperty(name="Amount of edge loop cuts from top position", default=10,  min = 2)
 
     bpy.types.Scene.remove_basal_threshold = bpy.props.IntProperty(name="Threshold for the removal of the basal region.", default=25,  min = 0)
