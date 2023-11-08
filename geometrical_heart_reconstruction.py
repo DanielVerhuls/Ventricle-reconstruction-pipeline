@@ -263,7 +263,6 @@ def dissolve_edge_loops(context, obj):
     vg_orifice.add(marked_verts, 1, 'ADD' )
     return vg_orifice
     
-
 class MESH_OT_remove_basal(bpy.types.Operator): 
     """Remove the basal region using a threshold value."""
     bl_idname = 'heart.remove_basal'
@@ -323,7 +322,7 @@ def remove_basal_region(context, obj, del_nodes): #!!!
 ## Refinement
     vg_orifice = refine_upper_apical_edge_loop(obj, vg_orifice)
     # !!! move ventricle up longitudinally
-    #smooth_apical_region(context, obj, vg_orifice)
+    # smooth_apical_region(context, obj, vg_orifice)
 ## Close function.
     obj.select_set(False)
     return del_nodes #!!! apply to other ventricles. currently only reference, to do fuer die anderen ventricle
@@ -468,7 +467,20 @@ def build_support_structure(context, obj, ratio):
     """Build support structure to help the poisson surface reconstrucion algorithm create a smooth surface after Poisson surface reconstruction."""
     aortic_min_up, mitral_min_up = build_both_valves(context, obj, ratio) # Larger annulus structure (upscaled).
     aortic_min_down, mitral_min_down =  build_both_valves(context, obj, 1 / ratio) # Smaller annulus structure (downscaled).
+    build_both_centers(context, obj)
     return aortic_min_up, mitral_min_up, aortic_min_down, mitral_min_down
+
+def build_both_centers(context, obj):
+    """Build both the aortic and mitral valve."""
+    if build_center(context, obj, valve_mode = "Aortic" ) and build_center(context, obj,  valve_mode = "Mitral"): return True
+    else: return False
+
+def build_center(context, obj,  valve_mode):
+    """Build ventricle valve and connect it to current geometry."""
+    if valve_mode == "Aortic": obj_name = f"A{context.scene.approach}_AV_Center"
+    elif valve_mode == "Mitral": obj_name = f"A{context.scene.approach}_MV_Center"
+    else: return False
+    return add_and_join_object(context, obj, obj_name, valve_mode, 1)
 
 class MESH_OT_poisson(bpy.types.Operator):
     """Apply Poisson surface reconstrucion to point cloud creating a surface mesh."""
@@ -832,7 +844,7 @@ def mesh_create_basal(context): #!!! old, deprecated
         basal.select_set(False)
         basal.hide_set(True)
     # Remove old basal region objects.
-    if not context.scene.approach == 5: bpy.data.objects.remove(bpy.data.objects["basal_ref"], do_unlink=True)
+    if context.scene.approach == 5: bpy.data.objects.remove(bpy.data.objects["basal_ref"], do_unlink=True)
     bpy.data.objects.remove(bpy.data.objects["basal_region"], do_unlink=True)
     bpy.data.objects.remove(bpy.data.objects["basal_region_poisson"], do_unlink=True)
     return basal_regions
