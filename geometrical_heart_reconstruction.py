@@ -1294,10 +1294,10 @@ class MESH_OT_Ventricle_Sort(bpy.types.Operator):
     bl_idname = 'heart.sort_ventricles'
     bl_label = 'Sort ventricles by volume starting with ESV.'
     def execute(self, context):
-        if not sort_ventricles(context, context.selected_objects): return{'CANCELLED'}
+        if not sort_ventricles(context.selected_objects): return{'CANCELLED'}
         return{'FINISHED'}
 
-def sort_ventricles(context, selected_objects):
+def sort_ventricles(selected_objects):
     """Sort ventricles by volume starting with minimal volume (End-systolic volume)."""
     volumes = get_volumes(selected_objects, True)
     val, idx = min((val, idx) for (idx, val) in enumerate(volumes))
