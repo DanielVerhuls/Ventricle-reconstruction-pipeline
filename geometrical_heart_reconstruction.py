@@ -918,7 +918,7 @@ def compute_height_plane(context): #!!! nicht mehr noetig mit neuem removal of b
     elif context.scene.min_valves < 1.025 * context.scene.max_apical: # Basal and apical region lie very close to one another. This could lead to large kinks in the geometry.
         cons_print("Info: The basal and apical region are very close to one another. The geometry may contain large kinks especially in the connection between those regions. Try a higher dissolve loop number or higher z-value for the input valves.")
     else: pass # Basal and apical region have enough distance.
-    context.scene.height_plane = (context.scene.max_apical + context.scene.min_valves) / 2 # Choose z-value between lowest valve vertex and highest basal vertex.
+    context.scene.height_plane = (2 * context.scene.max_apical + context.scene.min_valves) / 3 # Choose z-value between lowest valve vertex and highest basal vertex.
     return True
 
 def apply_voxel_remesh(voxel_size):
