@@ -895,7 +895,6 @@ def create_basal_region_for_object(context, reference_copy):
     if not compute_height_plane(context): return False # Compute height plane for the removal of the apical region.
     # Poisson with remeshing and triangulation.
     poisson_basal = create_poisson_from_object_pointcloud(context, reference_copy)
-    sad
     voxel_size = min(context.scene.aortic_radius, context.scene.mitral_radius_long, context.scene.mitral_radius_small) / 5 # Compute voxel_size for remesh and merge dependent of the smallest valve size.
     apply_voxel_remesh(voxel_size) # Apply Remesh for better mesh quality (remove small mesh elements with high cell skewness).
     # Triangulate remesh.
