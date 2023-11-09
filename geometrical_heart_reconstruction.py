@@ -280,10 +280,14 @@ def remove_multiple_basal_region(context):
         return False
     selected_objects = context.selected_objects
     reference_copy = copy_object(find_reference_ventricle_name(selected_objects), 'reference') # Find object with max volume and create a copy of it as a reference object.
+    cons_print(f"Reference object: {bpy.types.Scene.reference_object_name}")
     for obj in selected_objects: obj.select_set(False) # Deselect objects.
     # Basal region removal. First for reference, then remaining objects.
     deleted_verts = remove_basal_region(context, reference_copy, []) # Remove in reference object
-    for obj in selected_objects: remove_basal_region(context, obj, deleted_verts) # Remove from reference object (mean volume should be best)!!!.
+    for obj in selected_objects: remove_basal_region(context, obj, deleted_verts) 
+    # Longitudinal shift of each ventricle to match reference object, reducing volume discrepancy between systole and diastole between raw data and reconstructed data.
+    find_max_value_after_basal_removal(context, selected_objects)
+    shift_ventricles_longitudinally(context, selected_objects)
     # Cleanup.
     for obj in selected_objects: obj.select_set(True) # Reselect objects from original selection after main operations are executed.
     bpy.data.objects.remove(bpy.data.objects["reference"], do_unlink=True) # Remove reference object.
@@ -294,7 +298,7 @@ def remove_basal_region(context, obj, del_nodes): #!!!
     obj.select_set(True)
     bpy.context.view_layer.objects.active = obj
     deselect_object_vertices(obj)
-## Select vertices to delete (above z-coordinate threshold).
+    # Select vertices to delete (above z-coordinate threshold).
     bm = transfer_data_to_mesh(obj) 
     if del_nodes == []: # Initialisation of deleted node selection for reference object.
         for v in bm.verts:
@@ -310,20 +314,18 @@ def remove_basal_region(context, obj, del_nodes): #!!!
     bpy.ops.object.mode_set(mode='EDIT') 
     bpy.ops.mesh.delete_edgeloop()
     bpy.ops.object.mode_set(mode='OBJECT')
-## Save upper apical edge loop in a vertex group to be selected again later on.
+    # Save upper apical edge loop in a vertex group to be selected again later on.
     bm = transfer_data_to_mesh(obj)
     marked_verts = [v.index for v in bm.verts if v.select]
     vg_upper_apical = "upper_apical_edge_loop"
     vg_orifice = obj.vertex_groups.new(name = vg_upper_apical)
     vg_orifice.add(marked_verts, 1, 'ADD' )
-## Remove remaining face create after delete_edgeloop().
+    # Remove remaining face create after delete_edgeloop().
     bpy.ops.object.mode_set(mode='EDIT') 
     bpy.ops.mesh.delete(type='FACE') 
-## Refinement
+    # Refinement
     vg_orifice = refine_upper_apical_edge_loop(obj, vg_orifice)
-    # !!! move ventricle up longitudinally
-    # smooth_apical_region(context, obj, vg_orifice)
-## Close function.
+    # Close function.
     obj.select_set(False)
     return del_nodes #!!! apply to other ventricles. currently only reference, to do fuer die anderen ventricle
 
@@ -384,6 +386,20 @@ def smooth_apical_region(context, obj, vg_orifice):
         bpy.ops.object.vertex_group_deselect()
         bpy.ops.mesh.vertices_smooth(factor=0.4, repeat=3-i)
     bpy.ops.object.mode_set(mode='OBJECT')
+
+def shift_ventricles_longitudinally(context, objects):
+    """Shift ventricle to reference ventricle."""
+    for obj in objects:
+        max_obj_val, min_obj_val = get_min_max(obj)
+        shift_distance =  context.scene.max_apical - max_obj_val[2]
+        print(f"Max of ventricle {max_obj_val[2]} creating difference of {shift_distance} towards reference height {context.scene.max_apical}")
+        obj.select_set(True)
+        bpy.context.view_layer.objects.active = obj
+        bpy.context.object.location[2] = shift_distance
+        bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)
+        obj.select_set(False)
+
+
 
 class MESH_OT_build_valve(bpy.types.Operator):
     """Create geometry for mitral and aortic valve."""
@@ -793,7 +809,7 @@ def mesh_create_basal(context):
         return False
     selected_objects = context.selected_objects
     # Find object with mean volume and create a copy of it as a reference object to create the reference basal region from.
-    reference_copy = copy_object(find_reference_ventricle_name(selected_objects), 'basal_region')
+    reference_copy = copy_object(bpy.types.Scene.reference_object_name, 'basal_region')
     # Deselect objects.
     reference_copy.select_set(False)
     for obj in selected_objects: obj.select_set(False)
@@ -825,7 +841,7 @@ def find_reference_ventricle_name(objects):
             bpy.types.Scene.reference_object_name = obj.name
     return bpy.types.Scene.reference_object_name
 
-def find_max_value_after_dissolve(context, objects): #!!! very inefficient currently and useless with new removal of basal region as z_max is known
+def find_max_value_after_basal_removal(context, objects): #!!! very inefficient currently and useless with new removal of basal region as z_max is known
     """Find the maximal z-value in all ventricle geometries after dissolving"""
     # Copy object list.
     objects_copy = []
@@ -849,7 +865,7 @@ def find_max_value_after_dissolve(context, objects): #!!! very inefficient curre
         cons_print(f"max_val: {max_val[2]}")
         cons_print(f"context.scene.max_apical: {context.scene.max_apical}")
         if max_val[2] > context.scene.max_apical: 
-            cons_print(f"geaendert!!!!")
+            cons_print(f"Changed max apical value from {context.scene.max_apical} to {max_val[2]}") #!!! kann bald raus
             context.scene.max_apical = max_val[2]
         obj.select_set(False)
     # Remove list of copied objects after finding the maximum.
@@ -1777,7 +1793,7 @@ def register():
     bpy.types.Scene.max_apical = bpy.props.FloatProperty(name="Maximal z-value of apical region after cutting", default=20)
     bpy.types.Scene.amount_of_cuts = bpy.props.IntProperty(name="Amount of edge loop cuts from top position", default=10,  min = 2)
 
-    bpy.types.Scene.remove_basal_threshold = bpy.props.IntProperty(name="Threshold for the removal of the basal region.", default=25,  min = 0)
+    bpy.types.Scene.remove_basal_threshold = bpy.props.FloatProperty(name="Threshold for the removal of the basal region.", default=28.5,  min = 0)
     # Possion algorithm.
     bpy.types.Scene.poisson_depth = bpy.props.IntProperty(name="Depth of possion algorithm", default=10,  min = 1)
     # Aortic valve.
