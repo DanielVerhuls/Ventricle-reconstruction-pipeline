@@ -288,6 +288,7 @@ def remove_multiple_basal_region(context):
     # Longitudinal shift of each ventricle to match reference object, reducing volume discrepancy between systole and diastole between raw data and reconstructed data.
     find_max_value_after_basal_removal(context, selected_objects)
     shift_ventricles_longitudinally(context, selected_objects)
+    context.scene.ref_maxima, context.scene.ref_minima = get_min_max(reference_copy)    
     # Cleanup.
     for obj in selected_objects: obj.select_set(True) # Reselect objects from original selection after main operations are executed.
     bpy.data.objects.remove(bpy.data.objects["reference"], do_unlink=True) # Remove reference object.
@@ -383,7 +384,6 @@ def smooth_apical_region(context, obj, vg_orifice):
         bpy.ops.object.vertex_group_deselect()
     bpy.ops.object.mode_set(mode='OBJECT')
 
-
 def shift_ventricles_longitudinally(context, objects):
     """Shift ventricle to reference ventricle."""
     for obj in objects:
@@ -430,16 +430,36 @@ def add_and_join_object(context, obj, new_obj_name, valve_mode, ratio):
     scale_rotate_translate_object(context, new_obj, valve_mode, ratio)
     maxim, minim = get_min_max(new_obj)
     # Combine new object with selected object.
+    cons_print(f"Adding object: {new_obj.name} into {obj.name}")
     join_objects(obj, new_obj) 
     return minim[2]
 
-def scale_rotate_translate_object(context, obj, valve_mode, ratio):
+def scale_rotate_translate_object(context, new_obj, valve_mode, ratio):
     """Scale, rotate and shift object and save transformation."""
-    translation, angles, radius_vertical, radius_horizontal = get_valve_data(context, valve_mode) # Get scale from UI-data.
-    obj.scale = (ratio * radius_vertical, ratio * radius_horizontal, ratio * (radius_horizontal + radius_vertical) / 2) # Scale object with given ratio.
-    obj.rotation_euler = angles # Rotate object by input angles.
-    obj.location = translation # Translate object with input translation.
-    if obj.mode == 'OBJECT': bpy.ops.object.mode_set()
+    if valve_mode == "Mitral" or valve_mode == "Aortic":
+        translation, angles, radius_vertical, radius_horizontal = get_valve_data(context, valve_mode) # Get scale from UI-data.
+    else:
+        cons_print(f"Sind in der Testumgebung!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+        # For support structure only. For now no changes to rotation, but slightly increased scaling.
+        angles = (0,0,0)
+        radius_vertical = 2
+        radius_horizontal = 2
+        # Find position furthest away from any other points before Poisson surface reconstruction to reduce the size of the largest wholes in the geometry. This will improve Poisson surface reconstruction.
+        x_center = (context.scene.ref_minima[0] + context.scene.ref_maxima[0]) / 2
+        y_value = (context.scene.translation_aortic[1] + context.scene.translation_mitral[1]) / 2
+        z_value = (context.scene.translation_aortic[2] + context.scene.translation_mitral[2]) / 2
+        if valve_mode == "Front":
+            x_value = (x_center + context.scene.ref_maxima[0]) / 2
+            translation = (x_value, y_value, z_value)
+        elif valve_mode =="Back":
+            x_value = (x_center +  context.scene.ref_minima[0]) / 2
+            translation = (x_value, y_value, z_value)
+        else:
+            return False
+    new_obj.scale = (ratio * radius_vertical, ratio * radius_horizontal, ratio * (radius_horizontal + radius_vertical) / 2) # Scale object with given ratio.
+    new_obj.rotation_euler = angles # Rotate object by input angles.
+    new_obj.location = translation # Translate object with input translation.
+    if new_obj.mode == 'OBJECT': bpy.ops.object.mode_set()
     bpy.ops.object.transform_apply(location=True, rotation=True, scale=True) # Apply changes.
     bpy.ops.object.mode_set()
 
@@ -479,6 +499,7 @@ def build_support_structure(context, obj, ratio):
     aortic_min_up, mitral_min_up = build_both_valves(context, obj, ratio) # Larger annulus structure (upscaled).
     aortic_min_down, mitral_min_down =  build_both_valves(context, obj, 1 / ratio) # Smaller annulus structure (downscaled).
     build_both_centers(context, obj)
+    build_ouside_support_structure(context, obj)
     return aortic_min_up, mitral_min_up, aortic_min_down, mitral_min_down
 
 def build_both_centers(context, obj):
@@ -492,6 +513,12 @@ def build_center(context, obj,  valve_mode):
     elif valve_mode == "Mitral": obj_name = f"A{context.scene.approach}_MV_Center"
     else: return False
     return add_and_join_object(context, obj, obj_name, valve_mode, 1)
+
+def build_ouside_support_structure(context, obj):
+    """Build support structure in large holes between valves and the apical region."""
+    add_and_join_object(context, obj, f"A{context.scene.approach}_AV_Center", "Front", 1)
+    add_and_join_object(context, obj, f"A{context.scene.approach}_AV_Center", "Back", 1)
+
 
 class MESH_OT_poisson(bpy.types.Operator):
     """Apply Poisson surface reconstrucion to point cloud creating a surface mesh."""
@@ -582,6 +609,7 @@ def create_valve_orifice(context, valve_mode):
     vg_orifice.add( vertices_orifice, 1, 'ADD')
     # Remove troubling vertices(vertices with 2 neighbours) in (currently selected) orifice vertex group and smooth this edge loop.
     smooth_relax_edgeloop(obj, vg_orifice) 
+    #!!! old
     """ !!! funktioniert bei Janas geometrien auch ohne, weil die so groß sind. Vielleicht muss man das mit klappen skalieren.
     # Subdivide for the real mitral valve for a smoother transition.
     if valve_mode == "Mitral" and context.scene.approach == 5: 
@@ -602,9 +630,8 @@ def select_valve_vertices(context, valve_mode):
     if valve_mode == "Mitral":   valve_area = copy_object(f'A{context.scene.approach}_MV_Hull', 'Valve_area')
     elif valve_mode == "Aortic": valve_area = copy_object(f'A{context.scene.approach}_AV_Hull', 'Valve_area')
     else: return False
-    #valve_area = bpy.data.objects['Valve_area'] #!!!delete me
     # Rescale, translate and rotate valve area.
-    scale_rotate_translate_object(context, valve_area, valve_mode, ratio=1.025) # !!! scale of valve_area should be good, but maybe a context UI variable might be better.
+    scale_rotate_translate_object(context, valve_area, valve_mode, ratio=1.025) 
     # Select all vertices in the valve area object.
     bpy.ops.object.mode_set(mode='EDIT')
     bpy.ops.mesh.select_all(action="DESELECT")
@@ -645,6 +672,11 @@ def get_valve_data(context, valve_mode):
         angles = np.radians(context.scene.angle_mitral)
         radius_vertical = context.scene.mitral_radius_long
         radius_horizontal = context.scene.mitral_radius_small
+    elif valve_mode == "Front":
+        pass
+    elif valve_mode == "Back":
+        pass
+
     else: return False, False, False, False
     return translation, angles, radius_vertical, radius_horizontal 
     
@@ -806,7 +838,6 @@ def mesh_create_basal(context):
     # Find object with mean volume and create a copy of it as a reference object to create the reference basal region from.
     reference_copy = copy_object(bpy.types.Scene.reference_object_name, 'basal_region')
     # Deselect objects.
-    reference_copy.select_set(False)
     for obj in selected_objects: obj.select_set(False)
     # Operations to create basal region of the ventricle.
     basal_regions = create_basal_region_for_object(context, reference_copy)
@@ -820,7 +851,7 @@ def mesh_create_basal(context):
         basal.select_set(False)
         basal.hide_set(True)
     # Remove old basal region objects.
-    if  context.scene.approach == 5: bpy.data.objects.remove(bpy.data.objects["basal_ref"], do_unlink=True)
+    if context.scene.approach == 5: bpy.data.objects.remove(bpy.data.objects["basal_ref"], do_unlink=True)
     bpy.data.objects.remove(bpy.data.objects["basal_region"], do_unlink=True)
     bpy.data.objects.remove(bpy.data.objects["basal_region_poisson"], do_unlink=True)
     return basal_regions
@@ -847,8 +878,6 @@ def find_max_value_after_basal_removal(context, objects):
         bpy.context.view_layer.objects.active = obj
         # Find the largest z-value in the vertices of the current object.
         max_val, min_val = get_min_max(obj)
-        cons_print(f"max_val: {max_val[2]}")
-        cons_print(f"context.scene.max_apical: {context.scene.max_apical}")
         if max_val[2] > context.scene.max_apical: context.scene.max_apical = max_val[2]
         obj.select_set(False)
 
@@ -856,11 +885,8 @@ def create_basal_region_for_object(context, reference_copy):
     """Create basal part for a given ventricle."""
     for obj in context.selected_objects: obj.select_set(False) # Deselect all objects.
     # Remove basal region of reference object.
-    reference_copy.select_set(True)
     bpy.context.view_layer.objects.active = reference_copy
     deselect_object_vertices(reference_copy)
-    #remove_basal_region(context, reference_copy, []) # !!!
-    dissolve_edge_loops(context, reference_copy) # Function to remove basal region.
     # Add valve and support structure boundary nodes.
     aortic_min, mitral_min = build_both_valves(context, reference_copy, ratio= 1) # Valves have a annuli ratio of 1.
     aortic_min_up, mitral_min_up, aortic_min_down, mitral_min_down = build_support_structure(context, reference_copy, ratio=1.1) # Support structure for the valves have a annulie ratio of 1.1 and 1/1.1.
@@ -869,7 +895,8 @@ def create_basal_region_for_object(context, reference_copy):
     if not compute_height_plane(context): return False # Compute height plane for the removal of the apical region.
     # Poisson with remeshing and triangulation.
     poisson_basal = create_poisson_from_object_pointcloud(context, reference_copy)
-    voxel_size = min(context.scene.aortic_radius, context.scene.mitral_radius_long, context.scene.mitral_radius_small) / 5#6 # Compute voxel_size for remesh and merge dependent of the smallest valve size.
+    sad
+    voxel_size = min(context.scene.aortic_radius, context.scene.mitral_radius_long, context.scene.mitral_radius_small) / 5 # Compute voxel_size for remesh and merge dependent of the smallest valve size.
     apply_voxel_remesh(voxel_size) # Apply Remesh for better mesh quality (remove small mesh elements with high cell skewness).
     # Triangulate remesh.
     bpy.ops.object.modifier_add(type='TRIANGULATE')
@@ -918,7 +945,7 @@ def remove_apical_region(context, obj):
     bm = transfer_data_to_mesh(obj)
     for v in bm.verts:
         vertice_coords = obj.matrix_world @ v.co # Transfer to global coordinates.
-        if vertice_coords[2] < context.scene.height_plane: v.select = True # Only vertices below threshold (height-plane) shall be deleted. #!!! height_plane raus
+        if vertice_coords[2] < context.scene.height_plane: v.select = True # Only vertices below threshold (height-plane) shall be deleted.
         else:  v.select = False
     bm.to_mesh(obj.data) # Transfer selection to object. 
     # Remove selected vertices.
@@ -1372,6 +1399,7 @@ def add_vessels_and_valves(context):
     # Porous mitral valve are only inserted in the porous medium approach. For the interpolated mitral valve approach the mitral valve becomes part of the ventricle. Aortic valve is not inserted in A3.
     if context.scene.approach == 4 or context.scene.approach == 5: create_porous_valve_zones(context, 'Aortic', ['por_AV_imperm', 'por_AV_perm', 'por_AV_res']) 
     if context.scene.approach == 4: create_porous_valve_zones(context, 'Mitral', ['A4_MV_imperm', 'A4_MV_perm', 'A4_MV_res']) 
+
 class MESH_OT_Quick_Recon(bpy.types.Operator):
     """Quick geometrical reconstruction of all ventricles containing all steps of the reconstruction algorithm in one execution."""
     bl_idname = 'heart.quick_recon'
@@ -1747,7 +1775,7 @@ def register():
     bpy.types.Scene.pos_septum = bpy.props.FloatVectorProperty(name="Top position", default = (0,1,0))
     bpy.types.Scene.top_index = bpy.props.IntProperty(name="Index of top position", default = 0)
     # Cutting plane variables.
-    bpy.types.Scene.height_plane = bpy.props.FloatProperty(name="Height(z-value) of intersection plane", default=40,  min = 0.01)
+    bpy.types.Scene.height_plane = bpy.props.FloatProperty(name="Cut-off value for the creation of the reference basal region", default=40,  min = 0.01)
     bpy.types.Scene.min_valves = bpy.props.FloatProperty(name="Minimal z-value of valves", default=45)
     bpy.types.Scene.max_apical = bpy.props.FloatProperty(name="Maximal z-value of apical region after cutting", default=20)
     bpy.types.Scene.amount_of_cuts = bpy.props.IntProperty(name="Amount of edge loop cuts from top position", default=10,  min = 2) # !!! old
@@ -1765,6 +1793,9 @@ def register():
     bpy.types.Scene.translation_mitral = bpy.props.FloatVectorProperty(name="Aortic valve translation", default = (0,0,1))
     bpy.types.Scene.angle_mitral = bpy.props.FloatVectorProperty(name="Aortic valve rotation", default = (0,0,0))
     bpy.types.Scene.approach = bpy.props.IntProperty(name="Chosen modeling approach", default=3)
+    # Support structure.
+    bpy.types.Scene.ref_minima = bpy.props.FloatVectorProperty(name="Minima of reference object.", default = (0,0,0))
+    bpy.types.Scene.ref_maxima = bpy.props.FloatVectorProperty(name="Maxima of reference object.", default = (0,0,1))
     # Interpolation variables.
     bpy.types.Scene.time_rr = bpy.props.FloatProperty(name="Time RR-duration", default=0.6,  min = 0.01)
     bpy.types.Scene.time_diastole = bpy.props.FloatProperty(name="Time diastole", default=0.35,  min = 0.01) # !!!Compute automatically using the volumes and rr-duration. Automatische sortierung mit ESV am anfang waere auch gut
@@ -1773,6 +1804,8 @@ def register():
     bpy.types.Scene.reference_object_name = bpy.props.StringProperty(name="Name of the reference object", default = "ventricle_0")
     bpy.types.Scene.inset_faces_refinement_steps = bpy.props.IntProperty(name="Refinement steps when insetting faces in the connection algorithm.", default=1, min=1)
     bpy.types.Scene.connection_twist = bpy.props.IntProperty(name="Twist for bridging algorithm in connection.", default=0)
+
+
     # Register UI-classes for Panels and functions.
     for c in classes: bpy.utils.register_class(c)
     
