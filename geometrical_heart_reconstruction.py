@@ -918,7 +918,7 @@ def remove_apical_region(context, obj):
     bm = transfer_data_to_mesh(obj)
     for v in bm.verts:
         vertice_coords = obj.matrix_world @ v.co # Transfer to global coordinates.
-        if vertice_coords[2] < context.scene.height_plane: v.select = True # Only vertices below threshold (height-plane) shall be deleted.
+        if vertice_coords[2] < context.scene.height_plane: v.select = True # Only vertices below threshold (height-plane) shall be deleted. #!!! height_plane raus
         else:  v.select = False
     bm.to_mesh(obj.data) # Transfer selection to object. 
     # Remove selected vertices.
@@ -1674,32 +1674,7 @@ class PANEL_Objects(bpy.types.Panel):
         layout.operator('heart.add_atrium', text= "Add atrium", icon = 'CURSOR')
         row = layout.row()
         layout.operator('heart.add_aorta', text= "Add aorta", icon = 'MESH_CYLINDER')
-
-class PANEL_Reconstruction(bpy.types.Panel):
-    bl_label = "Ventricle reconstruction"
-    bl_idname = "PT_Reconstruction"
-    bl_space_type = 'VIEW_3D'
-    bl_region_type = 'UI'
-    bl_category = 'Herz'
-    bl_option = {'DEFALUT_CLOSED'}
-    def draw(self, context):
-        layout = self.layout
-        row = layout.row()
-        layout.operator('heart.ventricle_interpolation', text= "Interpolate ventricle", icon = 'IPO_EASE_IN')
-        row = layout.row()
-        row.label(text= f"Current approach: A{context.scene.approach}")
-        row = layout.row()
-        layout.operator("wm.approach_selection")
-        row = layout.row()
-        layout.operator('heart.create_basal', text= "Create basal region", icon = 'SPHERECURVE')
-        row = layout.row()
-        layout.operator('heart.connect_apical_and_basal', text= "Connect basal and apical parts", icon = 'ORPHAN_DATA')
-        row = layout.row()
-        layout.operator('heart.add_vessels_valves', text= "Add atrium, aorta and valves", icon = 'HANDLE_AUTO')
-        row = layout.row()
-        layout.operator('heart.quick_recon', text= "Quick reconstruction", icon = 'HEART')
-        row = layout.row()
-        
+       
 class PANEL_Pipeline(bpy.types.Panel):
     bl_label = "Geometric ventricle reconstruction pipeline"
     bl_idname = "PT_Pipeline"
@@ -1709,6 +1684,8 @@ class PANEL_Pipeline(bpy.types.Panel):
     bl_option = {'DEFALUT_CLOSED'}
     def draw(self, context):
         layout = self.layout
+        row = layout.row()
+        row.label(text= "Setup ventricle position and rotation") #!!! als button der diesen reiter oeffnet
         row = layout.row()
         layout.operator('heart.sort_ventricles', text= "Sort volumes", icon = 'HOME')
         row = layout.row()
@@ -1728,11 +1705,11 @@ class PANEL_Pipeline(bpy.types.Panel):
         row = layout.row()
         layout.operator('heart.create_basal', text= "Create basal region", icon = 'SPHERECURVE')
         row = layout.row()
-        row.label(text= "Connect apical and basal regions") 
+        layout.operator('heart.connect_apical_and_basal', text= "Connect basal and apical parts", icon = 'ORPHAN_DATA')
         row = layout.row()
         layout.operator('heart.add_vessels_valves', text= "Add atrium, aorta and valves", icon = 'HANDLE_AUTO')
         row = layout.row()
-        row.label(text= "Quick reconstruction") 
+        layout.operator('heart.quick_recon', text= "Quick reconstruction", icon = 'HEART')
 
 class PANEL_Dev_tools(bpy.types.Panel):
     bl_label = "Development tools"
@@ -1757,7 +1734,7 @@ class PANEL_Dev_tools(bpy.types.Panel):
 
 classes = [
     PANEL_Position_Ventricle, MESH_OT_ApproachSelection,
-    PANEL_Valves, PANEL_Poisson, PANEL_Objects, PANEL_Reconstruction, PANEL_Pipeline, PANEL_Setup_Variables,  PANEL_Dev_tools, MESH_OT_get_node, MESH_OT_ventricle_rotate, MESH_OT_poisson, MESH_OT_build_valve, MESH_OT_create_valve_orifice, 
+    PANEL_Valves, PANEL_Poisson, PANEL_Objects, PANEL_Pipeline, PANEL_Setup_Variables,  PANEL_Dev_tools, MESH_OT_get_node, MESH_OT_ventricle_rotate, MESH_OT_poisson, MESH_OT_build_valve, MESH_OT_create_valve_orifice, 
     MESH_OT_support_struct, MESH_OT_connect_valves, MESH_OT_cut_edge_loops, MESH_OT_Add_Atrium, MESH_OT_Add_Aorta, MESH_OT_Porous_zones, MESH_OT_Ventricle_Sort, MESH_OT_Quick_Recon, MESH_OT_remove_basal,
     MESH_OT_create_basal, MESH_OT_connect_apical_and_basal, MESH_OT_Ventricle_Interpolation, MESH_OT_Add_Vessels_Valves, MESH_DEV_volumes, MESH_DEV_indices, MESH_DEV_edge_index, MESH_DEV_test_function, MESH_DEV_check_node_connectivity,
 ]
