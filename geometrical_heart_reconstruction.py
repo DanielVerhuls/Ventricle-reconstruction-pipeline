@@ -782,10 +782,9 @@ class MESH_OT_create_basal(bpy.types.Operator):
     bl_label = 'Create basal region of ventricle using the position and angles of the heart valves.'
     def execute(self, context):
         if not mesh_create_basal(context): return{'CANCELLED'}
-        #if not mesh_new_create_basal(context): return{'CANCELLED'}
         return{'FINISHED'} 
 
-def mesh_new_create_basal(context):
+def mesh_create_basal(context):
     """Create basal region."""
     cons_print("Create basal regions for selected ventricles...")
     # Read selected objects.
@@ -811,40 +810,6 @@ def mesh_new_create_basal(context):
         basal.hide_set(True)
     # Remove old basal region objects.
     if  context.scene.approach == 5: bpy.data.objects.remove(bpy.data.objects["basal_ref"], do_unlink=True)
-    bpy.data.objects.remove(bpy.data.objects["basal_region"], do_unlink=True)
-    bpy.data.objects.remove(bpy.data.objects["basal_region_poisson"], do_unlink=True)
-    return basal_regions
-
-def mesh_create_basal(context): #!!! old, deprecated
-    """Create basal region."""
-    cons_print("Create basal regions for selected ventricles...")
-    # Read selected objects.
-    if not context.selected_objects:
-        cons_print("No elements selected.")
-        return False
-    selected_objects = context.selected_objects
-    # Find object with mean volume and create a copy of it as a reference object to create the reference basal region from.
-    reference_copy = copy_object(find_reference_ventricle_name(selected_objects), 'basal_region')
-    # Deselect objects.
-    reference_copy.select_set(False)
-    for obj in selected_objects: obj.select_set(False)
-    # Operations to create basal region of the ventricle containing valve orifices.
-    # Find the largest z-value in all dissolved ventricle geometries.
-    find_max_value_after_dissolve(context, selected_objects)
-    cons_print(f"Max apical: {context.scene.max_apical}")
-    # Create basal region:
-    basal_regions = create_basal_region_for_object(context, reference_copy)
-    if not basal_regions: 
-        cons_print(f"Error during the creation of the basal regions.")
-        return False # If an error ocurred during creation of basal region, dont continue.
-    # Cleanup.
-    # Reselect objects to state previous to this operation and deselect (and hide for performance) created objects.
-    for obj in selected_objects: obj.select_set(True)
-    for basal in basal_regions: 
-        basal.select_set(False)
-        basal.hide_set(True)
-    # Remove old basal region objects.
-    if context.scene.approach == 5: bpy.data.objects.remove(bpy.data.objects["basal_ref"], do_unlink=True)
     bpy.data.objects.remove(bpy.data.objects["basal_region"], do_unlink=True)
     bpy.data.objects.remove(bpy.data.objects["basal_region_poisson"], do_unlink=True)
     return basal_regions
