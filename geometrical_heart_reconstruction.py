@@ -215,7 +215,7 @@ def get_neighbour_vertices(v): # !!! can maybe be shortend to one line.
     for e in v.link_edges: neighbours_index.append(e.other_vert(v).index)
     return neighbours_index
 
-def dissolve_edge_loops(context, obj): 
+def dissolve_edge_loops(context, obj):  #!!! old
     """Dissolve a given amount of edge loops."""
     bpy.context.tool_settings.mesh_select_mode = (True, False, False) # Make sure vertex mode is selected in edit mode.
     bm = transfer_data_to_mesh(obj) # Transfer object in mesh data.
@@ -1643,21 +1643,23 @@ class PANEL_Setup_Variables(bpy.types.Panel):
     bl_category = 'Herz'
     bl_option = {'DEFALUT_CLOSED'}
     def draw(self, context):
-        layout = self.layout
-        row = layout.row()
-        row.prop(context.scene, 'amount_of_cuts', text="Amount of cut edge loops")  
+        layout = self.layout   
         row = layout.row()
         row.prop(context.scene, 'remove_basal_threshold', text="Threshold for basal region removal") 
-        row = layout.row()
-        row.prop(context.scene, 'poisson_depth', text="Depth of poisson reconstruction algorithm") 
-        row = layout.row()
-        layout.prop(context.scene, "inset_faces_refinement_steps", text="Refinement steps for insetting faces.")
-        row = layout.row()
-        layout.prop(context.scene, "connection_twist", text="Twist during connecting algorithm")
         row = layout.row()
         row.prop(context.scene, 'time_rr', text="Time RR-duration") 
         row = layout.row()
         row.prop(context.scene, 'time_diastole', text="Time diastole") 
+        row = layout.row()
+        row.label(text= "Optional setup variables.") 
+        row = layout.row()
+        row.prop(context.scene, 'poisson_depth', text="Depth of poisson reconstruction algorithm") 
+        row = layout.row()
+        layout.prop(context.scene, "inset_faces_refinement_steps", text="Refinement steps for insetting faces during connection algorithm.")
+        row = layout.row()
+        layout.prop(context.scene, "connection_twist", text="Twist during connecting algorithm for the function looptools_bridge.")
+        row = layout.row()
+        row.prop(context.scene, 'amount_of_cuts', text="Amount of cut edge loops")  #!!! kann raus
 
 class PANEL_Objects(bpy.types.Panel):
     bl_label = "Surrounding objects"
@@ -1731,7 +1733,6 @@ class PANEL_Dev_tools(bpy.types.Panel):
         row = layout.row()
         layout.operator('heart.dev_test_function', text= "Test function", icon = 'CHECKMARK')     
    
-
 classes = [
     PANEL_Position_Ventricle, MESH_OT_ApproachSelection,
     PANEL_Valves, PANEL_Poisson, PANEL_Objects, PANEL_Pipeline, PANEL_Setup_Variables,  PANEL_Dev_tools, MESH_OT_get_node, MESH_OT_ventricle_rotate, MESH_OT_poisson, MESH_OT_build_valve, MESH_OT_create_valve_orifice, 
@@ -1749,7 +1750,7 @@ def register():
     bpy.types.Scene.height_plane = bpy.props.FloatProperty(name="Height(z-value) of intersection plane", default=40,  min = 0.01)
     bpy.types.Scene.min_valves = bpy.props.FloatProperty(name="Minimal z-value of valves", default=45)
     bpy.types.Scene.max_apical = bpy.props.FloatProperty(name="Maximal z-value of apical region after cutting", default=20)
-    bpy.types.Scene.amount_of_cuts = bpy.props.IntProperty(name="Amount of edge loop cuts from top position", default=10,  min = 2)
+    bpy.types.Scene.amount_of_cuts = bpy.props.IntProperty(name="Amount of edge loop cuts from top position", default=10,  min = 2) # !!! old
 
     bpy.types.Scene.remove_basal_threshold = bpy.props.FloatProperty(name="Threshold for the removal of the basal region.", default=28.5,  min = 0)
     # Possion algorithm.
