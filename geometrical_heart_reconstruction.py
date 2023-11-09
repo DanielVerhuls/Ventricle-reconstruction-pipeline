@@ -325,9 +325,10 @@ def remove_basal_region(context, obj, del_nodes): #!!!
     bpy.ops.mesh.delete(type='FACE') 
     # Refinement
     vg_orifice = refine_upper_apical_edge_loop(obj, vg_orifice)
+    smooth_apical_region(context, obj, vg_orifice)
     # Close function.
     obj.select_set(False)
-    return del_nodes #!!! apply to other ventricles. currently only reference, to do fuer die anderen ventricle
+    return del_nodes
 
 def refine_upper_apical_edge_loop(obj, vg_orifice):
     """Flatten the upper apical edge loop."""
@@ -336,9 +337,8 @@ def refine_upper_apical_edge_loop(obj, vg_orifice):
     bpy.ops.object.vertex_group_select()
     # Smooth highest edge loop of apical region aligning the vertices onto a plane. !!! hat noch verbesserungsbedarf. Alle punkte auf einheitliche Hoehe waere gut.
     bpy.ops.mesh.looptools_relax(input='selected', interpolation='linear', iterations='5', regular=True) # Reduce spikes on the highest edge loop.
-    bpy.ops.mesh.looptools_flatten(influence=100, lock_x=False, lock_y=False, lock_z=False, plane='best_fit', restriction='none') # Flatten highest edge loop onto a plane
+    bpy.ops.mesh.looptools_flatten(influence=90, lock_x=False, lock_y=False, lock_z=False, plane='best_fit', restriction='none') # Flatten highest edge loop onto a plane
     # Subdivide last edge loop   
-    # !!! get amount of upper apical and lower basal edge loops to optimize this subdivision
     return subdivide_last_edge_loop(obj, vg_orifice)
     
 def subdivide_last_edge_loop(obj, vg_orifice):
@@ -366,26 +366,23 @@ def subdivide_last_edge_loop(obj, vg_orifice):
 
 def smooth_apical_region(context, obj, vg_orifice):
     """Smooth apical region in the region of the cut."""
+    deselect_object_vertices(obj)
     bpy.ops.object.mode_set(mode='EDIT')
     bpy.ops.object.vertex_group_set_active(group=vg_orifice.name)
-    deselect_object_vertices(obj)
     # Find vertices to select initially for smoothing.
-    bpy.ops.object.mode_set(mode='OBJECT') 
-    bm = transfer_data_to_mesh(obj)
-    for v in bm.verts: # Select vertices by z-threshold.
-        vertice_coords = obj.matrix_world @ v.co 
-        if vertice_coords[2] > 9 / 10 * context.scene.remove_basal_threshold: v.select = True
-    bm.to_mesh(obj.data) # Transfer selection to object.
-    bpy.ops.object.mode_set(mode='EDIT') 
-    # First strong smoothing operation.
+    init_edge_loops = 2 # Initially selected vertices for smoothing operation.
+    bpy.ops.object.vertex_group_select()
+    for i in range(init_edge_loops): 
+        bpy.ops.mesh.select_more()
     bpy.ops.object.vertex_group_deselect()
-    bpy.ops.mesh.vertices_smooth(factor=0.4, repeat=10)
+    # # Continuously weaker smoothing operations with more nodes to create a smooth transition between smoothed and unsmoothed region.
     n_smooth_iter = 3
-    for i in range(n_smooth_iter): # Continuously weaker smoothing operations with more nodes to create a smooth transition between smoothed and unsmoothed region.
+    for i in range(n_smooth_iter): 
+        bpy.ops.mesh.vertices_smooth(factor=0.5, repeat=n_smooth_iter+2-i)
         bpy.ops.mesh.select_more()
         bpy.ops.object.vertex_group_deselect()
-        bpy.ops.mesh.vertices_smooth(factor=0.4, repeat=3-i)
     bpy.ops.object.mode_set(mode='OBJECT')
+
 
 def shift_ventricles_longitudinally(context, objects):
     """Shift ventricle to reference ventricle."""
@@ -398,8 +395,6 @@ def shift_ventricles_longitudinally(context, objects):
         bpy.context.object.location[2] = shift_distance
         bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)
         obj.select_set(False)
-
-
 
 class MESH_OT_build_valve(bpy.types.Operator):
     """Create geometry for mitral and aortic valve."""
@@ -841,35 +836,21 @@ def find_reference_ventricle_name(objects):
             bpy.types.Scene.reference_object_name = obj.name
     return bpy.types.Scene.reference_object_name
 
-def find_max_value_after_basal_removal(context, objects): #!!! very inefficient currently and useless with new removal of basal region as z_max is known
+def find_max_value_after_basal_removal(context, objects):
     """Find the maximal z-value in all ventricle geometries after dissolving"""
-    # Copy object list.
-    objects_copy = []
-    for counter, obj in enumerate(objects):
-        copied_obj =  copy_object(obj.name, str(counter))
-        objects_copy.append(copied_obj)
-    # Initialize objects and their copies deselected .
     for obj in objects: obj.select_set(False)
-    for obj in objects_copy: obj.select_set(False)
     context.scene.max_apical = 0 # Reset maximum apical value.
     # Find max value in z-direction.
-    for obj in objects_copy:
+    for obj in objects:
         # Select object,set is as active and deselect all its vertices.
         obj.select_set(True)
         bpy.context.view_layer.objects.active = obj
-        deselect_object_vertices(obj)
-        # Cut basal part of the ventricle.
-        dissolve_edge_loops(context, obj)
         # Find the largest z-value in the vertices of the current object.
         max_val, min_val = get_min_max(obj)
         cons_print(f"max_val: {max_val[2]}")
         cons_print(f"context.scene.max_apical: {context.scene.max_apical}")
-        if max_val[2] > context.scene.max_apical: 
-            cons_print(f"Changed max apical value from {context.scene.max_apical} to {max_val[2]}") #!!! kann bald raus
-            context.scene.max_apical = max_val[2]
+        if max_val[2] > context.scene.max_apical: context.scene.max_apical = max_val[2]
         obj.select_set(False)
-    # Remove list of copied objects after finding the maximum.
-    for i in range(len(objects_copy)): bpy.data.objects.remove(bpy.data.objects[str(i)], do_unlink=True)
 
 def create_basal_region_for_object(context, reference_copy):
     """Create basal part for a given ventricle."""
