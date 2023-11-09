@@ -430,7 +430,6 @@ def add_and_join_object(context, obj, new_obj_name, valve_mode, ratio):
     scale_rotate_translate_object(context, new_obj, valve_mode, ratio)
     maxim, minim = get_min_max(new_obj)
     # Combine new object with selected object.
-    cons_print(f"Adding object: {new_obj.name} into {obj.name}")
     join_objects(obj, new_obj) 
     return minim[2]
 
@@ -439,7 +438,6 @@ def scale_rotate_translate_object(context, new_obj, valve_mode, ratio):
     if valve_mode == "Mitral" or valve_mode == "Aortic":
         translation, angles, radius_vertical, radius_horizontal = get_valve_data(context, valve_mode) # Get scale from UI-data.
     else:
-        cons_print(f"Sind in der Testumgebung!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
         # For support structure only. For now no changes to rotation, but slightly increased scaling.
         angles = (0,0,0)
         radius_vertical = 2
@@ -910,7 +908,7 @@ def create_basal_region_for_object(context, reference_copy):
     smooth_basal_region(context, voxel_size) # Smooth basal region nodes excluding valves and lower edge loop.
     return basal_regions
 
-def compute_height_plane(context): #!!! nicht mehr noetig mit neuem removal of basal region
+def compute_height_plane(context): 
     """Compute height of the plane used to cut off the apical region from the basal region of the reference geometry."""
     if context.scene.min_valves <= context.scene.max_apical: # The apical region extends over the basal region.
         cons_print(f"Error: Valves ({context.scene.min_valves}) lie beneath the highest point of the ventricle({context.scene.max_apical}). Try a different setup for valve position or dissolve loops.")
@@ -1008,7 +1006,7 @@ def insert_valves_into_basal(context, poisson_basal):
     else: return False
     return basal_regions
 
-def connect_valve_orifice_reference(context, valve_mode, valve_index): # !!! ist diese funktion nötig -> gibt auch connect_valve_orifice
+def connect_valve_orifice_reference(context, valve_mode, valve_index): 
     """Connect orifices around valves with surrounding mesh nodes."""
     obj = bpy.context.active_object
     build_valve_surface(context, obj, valve_mode = valve_mode, ratio = 1, valve_index = valve_index) # Create valve interface nodes.
@@ -1032,7 +1030,7 @@ def connect_valve_orifice_reference(context, valve_mode, valve_index): # !!! ist
     obj.select_set(False)
     return new_edges_vert_indices
 
-def connect_valve_orifice_from_reference(context, valve_mode, valve_index, edges_reference): #!!! unfertig???
+def connect_valve_orifice_from_reference(context, valve_mode, valve_index, edges_reference): 
     """Connect the valve interface nodes with the valve orifice nodes from reference."""
     obj = bpy.context.active_object
     # Create exact valve nodes.
@@ -1184,7 +1182,10 @@ def prepare_geometry_for_bridging(context, obj, final_basal_region):
     bpy.context.view_layer.objects.active = obj
     deselect_object_vertices(obj)
     # Cut basal part of the ventricle.
-    vg_orifice = dissolve_edge_loops(context, obj)
+    for group in obj.vertex_groups:
+        if group.name == "upper_apical_edge_loop":
+            vg_orifice = group
+            break
     subdivide_last_edge_loop(obj, vg_orifice) # Apply subdivide to smooth out further connection. This complicates the surface reconstruction for the low resolution A3, so it is turned off.
     # Combine both geometries.
     current_basal.select_set(True)
