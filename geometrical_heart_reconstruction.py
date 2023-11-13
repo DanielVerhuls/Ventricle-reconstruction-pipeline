@@ -1050,7 +1050,7 @@ def smooth_basal_region(context, voxel_size):
     bpy.ops.object.vertex_group_set_active(group=str("Mitral_orifice"))
     bpy.ops.object.vertex_group_select()
     # Smooth again with orifice selected.
-    if context.scene.approach == 3 or context.scene.approach == 4: bpy.ops.mesh.remove_doubles(threshold=voxel_size * 0.85, use_sharp_edge_from_normals=False, use_unselected=False)
+    if context.scene.approach == 3 or context.scene.approach == 4: bpy.ops.mesh.remove_doubles(threshold=voxel_size * 0.9, use_sharp_edge_from_normals=False, use_unselected=False)
     bpy.ops.mesh.vertices_smooth(factor=0.75, repeat=20)     
     # Relax lower orifice edge loop.
     bpy.ops.mesh.select_all(action="DESELECT")
@@ -1060,7 +1060,7 @@ def smooth_basal_region(context, voxel_size):
     # Smooth inner vertices again.
     select_inner_basal_vertices(context)
     bpy.ops.object.mode_set(mode='EDIT')
-    bpy.ops.mesh.vertices_smooth(factor=0.5, repeat=5)
+    bpy.ops.mesh.vertices_smooth(factor=0.5, repeat=10)
     bpy.ops.object.mode_set(mode='OBJECT') 
 
 def select_inner_basal_vertices(context):
@@ -1279,7 +1279,8 @@ def smooth_connection_and_basal_region(context, obj):
     bpy.ops.object.vertex_group_set_active(group=str("lower_basal_edge_loop"))
     bpy.ops.object.vertex_group_select()  
     # Select edge loops below the connection. Selecting all apical nodes would greatly shrink the ventricle volume in that region.
-    for i in range(5):  # Iteratively smooth the selected nodes. This especially smooths the transition between connection and apical nodes.
+    smoothing_operations = 5
+    for i in range(smoothing_operations):  # Iteratively smooth the selected nodes. This especially smooths the transition between connection and apical nodes.
         bpy.ops.mesh.select_more() # Select edge loops until reaching an edgeloop, that was not subdivided during the removal of the basal region.
         # Exclude valve nodes in the selection process.
         bpy.ops.object.vertex_group_set_active(group=str("AV"))
@@ -1287,7 +1288,7 @@ def smooth_connection_and_basal_region(context, obj):
         bpy.ops.object.vertex_group_set_active(group=str("MV"))
         bpy.ops.object.vertex_group_deselect()
         # Continuously weaker smoothing. As hard smoothing creates kinks between smoothed nodes and unsmoothed nodes.
-        bpy.ops.mesh.vertices_smooth(factor=0.5, repeat=6-i)
+        bpy.ops.mesh.vertices_smooth(factor=0.5, repeat=smoothing_operations+5-i)
     bpy.ops.object.mode_set(mode='OBJECT')
 
 class MESH_OT_Ventricle_Sort(bpy.types.Operator): 
