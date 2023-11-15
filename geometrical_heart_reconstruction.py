@@ -1464,11 +1464,12 @@ def check_node_connectivity(context):
     return True
 
 class MESH_OT_ApproachSelection(bpy.types.Operator):
+    """Select approach"""
     bl_label = "Select approach"
     bl_idname = "wm.approach_selection"
     
     approach_enum : bpy.props.EnumProperty(
-        name= "",
+        name= "Select approach",
         description= "Select approach",
         items= [('Op_A3', 'Porous jump (A3)', 'Interpolated MV (A5)'),
                 ('Op_A4', 'Porous Medium (A4)', 'Interpolated MV (A5)'),
@@ -1584,14 +1585,15 @@ class PANEL_Setup_Variables(bpy.types.Panel):
         row = layout.row()
         row.prop(context.scene, 'time_diastole', text="Time diastole") 
         row = layout.row()
-        row.label(text= "Optional setup variables.") 
+        row.prop(context.scene, 'frames_ventricle', text="Frames after interpolation") 
+        row = layout.row()
+        row.label(text= "Advanced setup variables.") 
         row = layout.row()
         row.prop(context.scene, 'poisson_depth', text="Depth of poisson reconstruction algorithm") 
         row = layout.row()
-        layout.prop(context.scene, "inset_faces_refinement_steps", text="Refinement steps for insetting faces during connection algorithm.")
-        row = layout.row()
         layout.prop(context.scene, "connection_twist", text="Twist during connecting algorithm for the function looptools_bridge.")
-
+        row = layout.row()
+        layout.prop(context.scene, "inset_faces_refinement_steps", text="Refinement steps for insetting faces during connection algorithm.")
 
 class PANEL_Objects(bpy.types.Panel):
     bl_label = "Surrounding objects"
@@ -1661,9 +1663,7 @@ class PANEL_Dev_tools(bpy.types.Panel):
         row = layout.row()
         layout.operator('heart.dev_check_edges', text= "Get edge index", icon = 'ARROW_LEFTRIGHT')
         row = layout.row()
-        layout.operator('heart.dev_check_node_connectivity', text= "Node-connectivity check", icon = 'CHECKMARK')
-        row = layout.row()
-        layout.operator('heart.dev_test_function', text= "Test function", icon = 'CHECKMARK')     
+        layout.operator('heart.dev_check_node_connectivity', text= "Node-connectivity check", icon = 'CHECKMARK') 
    
 classes = [
     PANEL_Position_Ventricle, MESH_OT_ApproachSelection,
@@ -1677,32 +1677,32 @@ def register():
     bpy.types.Scene.pos_top = bpy.props.FloatVectorProperty(name="Top position", default = (0,0,1))
     bpy.types.Scene.pos_bot = bpy.props.FloatVectorProperty(name="Top position", default = (0,0,0))
     bpy.types.Scene.pos_septum = bpy.props.FloatVectorProperty(name="Top position", default = (0,1,0))
-    # Cutting plane variables.
-    bpy.types.Scene.height_plane = bpy.props.FloatProperty(name="Cut-off value for the creation of the reference basal region", default=40,  min = 0.01)
-    bpy.types.Scene.min_valves = bpy.props.FloatProperty(name="Minimal z-value of valves", default=45)
-    bpy.types.Scene.max_apical = bpy.props.FloatProperty(name="Maximal z-value of apical region after cutting", default=20)
-
-    bpy.types.Scene.remove_basal_threshold = bpy.props.FloatProperty(name="Threshold for the removal of the basal region.", default=28.5,  min = 0)
-    # Possion algorithm.
-    bpy.types.Scene.poisson_depth = bpy.props.IntProperty(name="Depth of possion algorithm", default=10,  min = 1)
-    # Aortic valve.
-    bpy.types.Scene.aortic_radius = bpy.props.FloatProperty(name="aortic_radius", default=2,  min = 0.01)
-    bpy.types.Scene.translation_aortic = bpy.props.FloatVectorProperty(name="Aortic valve translation", default = (0,0,1))
-    bpy.types.Scene.angle_aortic = bpy.props.FloatVectorProperty(name="Aortic valve rotation", default = (0,0,0))
     # Mitral valve.
     bpy.types.Scene.mitral_radius_long = bpy.props.FloatProperty(name="mitral_radius_long", default=6,  min = 0.01)
     bpy.types.Scene.mitral_radius_small = bpy.props.FloatProperty(name="mitral_radius_small", default=3,  min = 0.01)
     bpy.types.Scene.translation_mitral = bpy.props.FloatVectorProperty(name="Aortic valve translation", default = (0,0,1))
     bpy.types.Scene.angle_mitral = bpy.props.FloatVectorProperty(name="Aortic valve rotation", default = (0,0,0))
-    bpy.types.Scene.approach = bpy.props.IntProperty(name="Chosen modeling approach", default=3)
+    # Aortic valve.
+    bpy.types.Scene.aortic_radius = bpy.props.FloatProperty(name="aortic_radius", default=2,  min = 0.01)
+    bpy.types.Scene.translation_aortic = bpy.props.FloatVectorProperty(name="Aortic valve translation", default = (0,0,1))
+    bpy.types.Scene.angle_aortic = bpy.props.FloatVectorProperty(name="Aortic valve rotation", default = (0,0,0))
     # Support structure.
     bpy.types.Scene.ref_minima = bpy.props.FloatVectorProperty(name="Minima of reference object.", default = (0,0,0))
     bpy.types.Scene.ref_maxima = bpy.props.FloatVectorProperty(name="Maxima of reference object.", default = (0,0,1))
+    # Cutting plane variables.
+    bpy.types.Scene.remove_basal_threshold = bpy.props.FloatProperty(name="Threshold for the removal of the basal region.", default=28.5,  min = 0)
+    bpy.types.Scene.height_plane = bpy.props.FloatProperty(name="Cut-off value for the creation of the reference basal region", default=40,  min = 0.01)
+    bpy.types.Scene.min_valves = bpy.props.FloatProperty(name="Minimal z-value of valves", default=45)
+    bpy.types.Scene.max_apical = bpy.props.FloatProperty(name="Maximal z-value of apical region after cutting", default=20)
+    # Approach selection.
+    bpy.types.Scene.approach = bpy.props.IntProperty(name="Chosen modeling approach", default=3, min = 3, max = 5)
+    # Possion algorithm.
+    bpy.types.Scene.poisson_depth = bpy.props.IntProperty(name="Depth of possion algorithm", default=10,  min = 1)
     # Interpolation variables.
     bpy.types.Scene.time_rr = bpy.props.FloatProperty(name="Time RR-duration", default=0.6,  min = 0.01)
     bpy.types.Scene.time_diastole = bpy.props.FloatProperty(name="Time diastole", default=0.35,  min = 0.01) # !!!Compute automatically using the volumes and rr-duration. Automatische sortierung mit ESV am anfang waere auch gut
     bpy.types.Scene.frames_ventricle = bpy.props.IntProperty(name="Amount of frames ventricle after interpolation", default=10,  min = 10)
-    # Connection variables.
+    # Connection algorithm variables.
     bpy.types.Scene.reference_object_name = bpy.props.StringProperty(name="Name of the reference object", default = "ventricle_0")
     bpy.types.Scene.inset_faces_refinement_steps = bpy.props.IntProperty(name="Refinement steps when insetting faces in the connection algorithm.", default=1, min=1)
     bpy.types.Scene.connection_twist = bpy.props.IntProperty(name="Twist for bridging algorithm in connection.", default=0)
