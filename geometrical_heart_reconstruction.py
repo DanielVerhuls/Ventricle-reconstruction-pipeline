@@ -1,7 +1,7 @@
 bl_info = {
     "name" : "Geometrical heart reconstrucion", 
     "author" : "Daniel Verhuelsdonk",
-    "version" : (1, 281),
+    "version" : (1, 282),
     "blender" : (3, 1, 0),
     "location" : "Operator Search",
     "description": "Panel and operators to geometrically reconstruct the upper heart shape",
@@ -103,7 +103,6 @@ class MESH_OT_get_node(bpy.types.Operator):
             if v.select:
                 counter += 1 # Increment to get the number of selected nodes
                 vertice_coords = obj.matrix_world @ v.co # Transform to global coordinate system
-                index = v.index
         # Check for the correct number of nodes selected.
         if counter !=1:
             cons_print('Incorrect amount of nodes. Only one node may be selected.')
@@ -111,7 +110,6 @@ class MESH_OT_get_node(bpy.types.Operator):
         # Using temporary veriables prevents the change of the global variable, when to many nodes are selected.
         if self.point_mode == "Top":  
             context.scene.pos_top = vertice_coords
-            context.scene.top_index = index # Update index of the top position.   # !!! kann raus sobald remove_basal neu ist 
         elif self.point_mode == "Bot": context.scene.pos_bot = vertice_coords
         elif self.point_mode == "Septum": context.scene.pos_septum = vertice_coords
         else:
@@ -1465,17 +1463,6 @@ def check_node_connectivity(context):
     cons_print(f"Node-connectivity matched for all {len(context.selected_objects)} selected elements.")
     return True
 
-class MESH_DEV_test_function(bpy.types.Operator):
-    """Test function"""
-    bl_idname = 'heart.dev_test_function'
-    bl_label = 'Test function'
-    def execute(self, context):
-        test_function(context)
-        return{'FINISHED'}
-
-def test_function(context): 
-    pass #currently unused!!!
-
 class MESH_OT_ApproachSelection(bpy.types.Operator):
     bl_label = "Select approach"
     bl_idname = "wm.approach_selection"
@@ -1682,7 +1669,7 @@ classes = [
     PANEL_Position_Ventricle, MESH_OT_ApproachSelection,
     PANEL_Valves, PANEL_Poisson, PANEL_Objects, PANEL_Pipeline, PANEL_Setup_Variables,  PANEL_Dev_tools, MESH_OT_get_node, MESH_OT_ventricle_rotate, MESH_OT_poisson, MESH_OT_build_valve, MESH_OT_create_valve_orifice, 
     MESH_OT_support_struct, MESH_OT_connect_valves, MESH_OT_Add_Atrium, MESH_OT_Add_Aorta, MESH_OT_Porous_zones, MESH_OT_Ventricle_Sort, MESH_OT_Quick_Recon, MESH_OT_remove_basal,
-    MESH_OT_create_basal, MESH_OT_connect_apical_and_basal, MESH_OT_Ventricle_Interpolation, MESH_OT_Add_Vessels_Valves, MESH_DEV_volumes, MESH_DEV_indices, MESH_DEV_edge_index, MESH_DEV_test_function, MESH_DEV_check_node_connectivity,
+    MESH_OT_create_basal, MESH_OT_connect_apical_and_basal, MESH_OT_Ventricle_Interpolation, MESH_OT_Add_Vessels_Valves, MESH_DEV_volumes, MESH_DEV_indices, MESH_DEV_edge_index, MESH_DEV_check_node_connectivity,
 ]
   
 def register():
@@ -1690,7 +1677,6 @@ def register():
     bpy.types.Scene.pos_top = bpy.props.FloatVectorProperty(name="Top position", default = (0,0,1))
     bpy.types.Scene.pos_bot = bpy.props.FloatVectorProperty(name="Top position", default = (0,0,0))
     bpy.types.Scene.pos_septum = bpy.props.FloatVectorProperty(name="Top position", default = (0,1,0))
-    bpy.types.Scene.top_index = bpy.props.IntProperty(name="Index of top position", default = 0)
     # Cutting plane variables.
     bpy.types.Scene.height_plane = bpy.props.FloatProperty(name="Cut-off value for the creation of the reference basal region", default=40,  min = 0.01)
     bpy.types.Scene.min_valves = bpy.props.FloatProperty(name="Minimal z-value of valves", default=45)
