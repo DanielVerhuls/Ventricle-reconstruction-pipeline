@@ -223,7 +223,7 @@ def remove_multiple_basal_region(context):
     for obj in selected_objects: obj.select_set(True) # Reselect objects from original selection after main operations are executed.
     bpy.data.objects.remove(bpy.data.objects["reference"], do_unlink=True) # Remove reference object.
 
-def remove_basal_region(context, obj, del_nodes): #!!!
+def remove_basal_region(context, obj, del_nodes):
     """Remove basal region of the ventricle using a threshold."""
     if obj.mode == 'EDIT': bpy.ops.object.mode_set(mode='OBJECT') # Toggle to object mode.
     obj.select_set(True)
@@ -537,17 +537,6 @@ def create_valve_orifice(context, valve_mode):
     vg_orifice.add( vertices_orifice, 1, 'ADD')
     # Remove troubling vertices(vertices with 2 neighbours) in (currently selected) orifice vertex group and smooth this edge loop.
     smooth_relax_edgeloop(obj, vg_orifice) 
-    #!!! old
-    """ !!! funktioniert bei Janas geometrien auch ohne, weil die so groß sind. Vielleicht muss man das mit klappen skalieren.
-    # Subdivide for the real mitral valve for a smoother transition.
-    if valve_mode == "Mitral" and context.scene.approach == 5: 
-        #!!!select more #Smoother mesh transition, subdivide last edge loop
-        bpy.ops.mesh.subdivide(number_cuts=1, ngon=False)
-        # select less
-        # subdivide
-        bpy.ops.object.mode_set(mode='OBJECT')
-        vg_orifice.add( vertices_orifice, 1, 'ADD')
-        bpy.ops.object.mode_set(mode='EDIT')"""
     bpy.ops.object.mode_set(mode='OBJECT')
     return True
 
