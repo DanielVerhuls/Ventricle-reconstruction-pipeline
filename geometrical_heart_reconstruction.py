@@ -18,6 +18,8 @@ import numpy as np
 import open3d as o3d
 scene = bpy.types.Scene
 
+dev_env_tools = False
+
 # Generally used functions.
 def cons_print(data):
     """Print to console for button presses. Used for error messages, information outputs and warnings"""
@@ -324,7 +326,7 @@ def shift_ventricles_longitudinally(context, objects):
         bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)
         obj.select_set(False)
 
-class MESH_OT_build_valve(bpy.types.Operator):
+class MESH_OT_build_valves(bpy.types.Operator):
     """Create geometry for mitral and aortic valve"""
     bl_idname = 'heart.build_valve'
     bl_label = 'Create geometry for mitral or aortic valve.'
@@ -677,12 +679,6 @@ def build_valve_surface(context, obj, valve_mode, ratio, valve_index):
     bpy.ops.object.vertex_group_set_active(group=str(vg_orifice))
     bpy.ops.object.vertex_group_select()
     bpy.ops.object.mode_set(mode='OBJECT') 
-
-
-
-
-
-
 
 class MESH_OT_create_basal(bpy.types.Operator):
     """Create basal region of ventricle using the position and angles of the heart valves"""
@@ -1299,8 +1295,10 @@ class MESH_OT_Quick_Recon(bpy.types.Operator):
     bl_idname = 'heart.quick_recon'
     bl_label = 'Quick geometrical reconstruction of all ventricles containing all steps of the reconstruction algorithm in one execution.'
     def execute(self, context):
-        if not interpolate_ventricle(context): return{'CANCELLED'} # Interpolate ventricle geometry.
-        if not mesh_new_create_basal(context): return{'CANCELLED'}# Operations to create basal region of the ventricle containing valve orifices.
+        if context.scene.approach == 5:
+            if not interpolate_ventricle(context): return{'CANCELLED'} # Interpolate ventricle geometry.
+        remove_multiple_basal_region(context) # Remove old basal region.
+        if not mesh_create_basal(context): return{'CANCELLED'}# Operations to create basal region of the ventricle containing valve orifices.
         if not mesh_connect_apical_and_basal(context): return {'CANCELLED'} # Connect apical regions with corresponding bassal regions.
         add_vessels_and_valves(context) # Add surrounding objects including aorta, atrium and valves.
         cleanup_basal_region(context) # Cleanup: Delete basal regions.
@@ -1390,7 +1388,7 @@ def check_edge(context):
     cons_print(f"Nodes not connected.")
     return False
 
-class MESH_DEV_check_node_connectivity(bpy.types.Operator):
+class MESH_OT_check_node_connectivity(bpy.types.Operator):
     """Check node connectivity between all selected objects"""
     bl_idname = 'heart.dev_check_node_connectivity'
     bl_label = 'Check node connectivity between all selected objects.'
@@ -1491,7 +1489,6 @@ class PANEL_Position_Ventricle(bpy.types.Panel):
         props = layout.operator('heart.get_point', text= "Select node at septum")
         props.point_mode = "Septum"  
         row = layout.row()
-        row.label(text= "Rotation and cutting") 
         row = layout.row()
         layout.operator('heart.ventricle_rotate', text= "Translate and rotate", icon = 'CON_ROTLIKE')
 
@@ -1522,12 +1519,13 @@ class PANEL_Valves(bpy.types.Panel):
         row.prop(context.scene, 'angle_aortic', text="Angle")
         row = layout.row()
         row.prop(context.scene, 'aortic_radius', text="Aortic radius", icon='META_BALL')
-        row = layout.row()
-        layout.operator('heart.build_valve',  text= "Add valve interface nodes", icon = 'PROP_OFF')
-        row = layout.row()
-        layout.operator('heart.support_struct',  text= "Build support structure around valves", icon = 'PROP_ON')
+        if dev_env_tools:
+            row = layout.row()
+            layout.operator('heart.build_valve',  text= "Add valve interface nodes", icon = 'PROP_OFF')
+            row = layout.row()
+            layout.operator('heart.support_struct',  text= "Build support structure around valves", icon = 'PROP_ON')
                 
-class PANEL_Poisson(bpy.types.Panel):
+class PANEL_Poisson(bpy.types.Panel): #!!! unnecessary for final version of addon
     bl_label = "Poisson"
     bl_idname = "PT_Poisson"
     bl_space_type = 'VIEW_3D'
@@ -1536,8 +1534,6 @@ class PANEL_Poisson(bpy.types.Panel):
     bl_option = {'DEFALUT_CLOSED'}
     def draw(self, context):
         layout = self.layout      
-        row = layout.row()
-        row.operator('heart.remove_basal', text= "Remove basal region", icon = 'LIBRARY_DATA_OVERRIDE') 
         row = layout.row()
         layout.operator('heart.poisson', text= "Apply Poisson surface reconstruction", icon = 'PROP_ON')
         row = layout.row()
@@ -1556,6 +1552,8 @@ class PANEL_Setup_Variables(bpy.types.Panel):
         layout = self.layout   
         row = layout.row()
         row.prop(context.scene, 'remove_basal_threshold', text="Threshold for basal region removal") 
+        row = layout.row()
+        row.label(text= "Interpolation variables.") 
         row = layout.row()
         row.prop(context.scene, 'time_rr', text="Time RR-duration") 
         row = layout.row()
@@ -1581,11 +1579,11 @@ class PANEL_Pipeline(bpy.types.Panel):
     def draw(self, context):
         layout = self.layout
         row = layout.row()
-        row.label(text= "Setup ventricle position and rotation") #!!! als button der diesen reiter oeffnet
-        row = layout.row()
         layout.operator('heart.sort_ventricles', text= "Sort volumes", icon = 'HOME')
         row = layout.row()
-        row.label(text= "Setup rotation and translation") #!!! als button der diesen reiter oeffnet
+        row.label(text= "Setup ventricle position and rotation") #!!! als button der diesen reiter oeffnet
+        row = layout.row()
+        row.label(text= "Setup valves") #!!! als button der diesen reiter oeffnet
         row = layout.row()
         layout.operator('heart.ventricle_interpolation', text= "Interpolate ventricle", icon = 'IPO_EASE_IN')
         row = layout.row()
@@ -1627,10 +1625,12 @@ class PANEL_Dev_tools(bpy.types.Panel):
    
 classes = [
     PANEL_Position_Ventricle, MESH_OT_ApproachSelection,
-    PANEL_Valves, PANEL_Poisson, PANEL_Pipeline, PANEL_Setup_Variables,  PANEL_Dev_tools, MESH_OT_get_node, MESH_OT_ventricle_rotate, MESH_OT_poisson, MESH_OT_build_valve, MESH_OT_create_valve_orifice, 
-    MESH_OT_support_struct, MESH_OT_connect_valves, MESH_OT_Ventricle_Sort, MESH_OT_Quick_Recon, MESH_OT_remove_basal,
-    MESH_OT_create_basal, MESH_OT_connect_apical_and_basal, MESH_OT_Ventricle_Interpolation, MESH_OT_Add_Vessels_Valves, MESH_DEV_volumes, MESH_DEV_indices, MESH_DEV_edge_index, MESH_DEV_check_node_connectivity,
+    PANEL_Valves, PANEL_Pipeline, PANEL_Setup_Variables, MESH_OT_get_node, MESH_OT_ventricle_rotate, MESH_OT_build_valves, MESH_OT_support_struct, 
+    MESH_OT_Ventricle_Sort, MESH_OT_Quick_Recon, MESH_OT_remove_basal,
+    MESH_OT_create_basal, MESH_OT_connect_apical_and_basal, MESH_OT_Ventricle_Interpolation, MESH_OT_Add_Vessels_Valves, MESH_OT_check_node_connectivity,
 ]
+
+dev_classes = [PANEL_Poisson, MESH_OT_poisson, MESH_OT_create_valve_orifice, MESH_OT_connect_valves, PANEL_Dev_tools, MESH_DEV_volumes, MESH_DEV_indices, MESH_DEV_edge_index]
   
 def register():
     # Position variables.
@@ -1670,8 +1670,14 @@ def register():
 
     # Register UI-classes for Panels and functions.
     for c in classes: bpy.utils.register_class(c)
+    # Register Development UI-classes.
+    if dev_env_tools: 
+        for c in dev_classes: bpy.utils.register_class(c)
+
     
 def unregister(): # Unregister classes.
     for c in classes: bpy.utils.unregister_class(c)
+    if dev_env_tools:
+        for c in dev_classes: bpy.utils.unregister_class(c)
     
 if __name__ == '__main__': register()  
