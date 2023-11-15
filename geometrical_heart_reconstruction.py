@@ -1,7 +1,7 @@
 bl_info = {
     "name" : "Geometrical heart reconstrucion", 
     "author" : "Daniel Verhuelsdonk",
-    "version" : (1, 282),
+    "version" : (1, 283),
     "blender" : (3, 1, 0),
     "location" : "Operator Search",
     "description": "Panel and operators to geometrically reconstruct the upper heart shape",
@@ -678,60 +678,11 @@ def build_valve_surface(context, obj, valve_mode, ratio, valve_index):
     bpy.ops.object.vertex_group_select()
     bpy.ops.object.mode_set(mode='OBJECT') 
 
-class MESH_OT_Add_Atrium(bpy.types.Operator):
-    """Add atrium to current geometries"""
-    bl_idname = 'heart.add_atrium'
-    bl_label = 'Add atrium to current geometries.'
-    def execute(self, context):
-        add_atrium(context)
-        return{'FINISHED'}
 
-def add_atrium(context):
-    """Copy atrium and place it above the mitral valve as a separate object"""
-    # Choose the atrium fitting the current case.
-    atrium = copy_object(f"A{context.scene.approach}_Atrium", "atrium")
-    atrium.select_set(True)
-    bpy.context.view_layer.objects.active = atrium
-    scale_rotate_translate_object(context, atrium, "Mitral", ratio=1)
-    return atrium
 
-class MESH_OT_Add_Aorta(bpy.types.Operator):
-    """Add aorta to current geometries"""
-    bl_idname = 'heart.add_aorta'
-    bl_label = 'Add aorta to current geometries.'
-    def execute(self, context):
-        add_aorta(context)
-        return{'FINISHED'}
-    
-def add_aorta(context):
-    """Copy aorta and place it above the aortic valve as a separate object"""
-    aorta = copy_object(f"A{context.scene.approach}_Aorta", "aorta")
-    aorta.select_set(True)
-    bpy.context.view_layer.objects.active = aorta
-    scale_rotate_translate_object(context, aorta, "Aortic", ratio=1)
-    return aorta
 
-class MESH_OT_Porous_zones(bpy.types.Operator):
-    """Add separate porous zone objects (valves, atrium and aorta) into workspace"""
-    bl_idname = 'heart.add_porous_zones'
-    bl_label = 'Add separate porous zone objects (valves, atrium and aorta) into workspace.'
-    def execute(self, context):
-        if context.scene.approach == 4 or context.scene.approach == 5:
-            valve_strings = [f'A{context.scene.approach}_AV_imperm', f'A{context.scene.approach}_AV_perm', f'A{context.scene.approach}_AV_res']
-        create_porous_valve_zones(context, 'Aortic', valve_strings)
-        if context.scene.approach == 4:
-            valve_strings = ['A4_MV_imperm', 'A4_MV_perm', 'A4_MV_res']
-            create_porous_valve_zones(context, 'Mitral', valve_strings)
-        return{'FINISHED'}
 
-def create_porous_valve_zones(context, valve_mode, valve_strings):
-    """Add separate porous zone objects (valves, atrium and aorta) into workspace"""
-    # Create new object by copying it from existing object.
-    for obj_str in valve_strings:
-        new_obj = copy_object(obj_str, f"p_{obj_str}")
-        new_obj.select_set(True)
-        bpy.context.view_layer.objects.active = new_obj
-        scale_rotate_translate_object(context, new_obj, valve_mode = valve_mode, ratio = 1)
+
 
 class MESH_OT_create_basal(bpy.types.Operator):
     """Create basal region of ventricle using the position and angles of the heart valves"""
@@ -1317,6 +1268,32 @@ def add_vessels_and_valves(context):
     if context.scene.approach == 4 or context.scene.approach == 5: create_porous_valve_zones(context, 'Aortic', ['por_AV_imperm', 'por_AV_perm', 'por_AV_res']) 
     if context.scene.approach == 4: create_porous_valve_zones(context, 'Mitral', ['A4_MV_imperm', 'A4_MV_perm', 'A4_MV_res']) 
 
+def add_atrium(context):
+    """Copy atrium and place it above the mitral valve as a separate object"""
+    # Choose the atrium fitting the current case.
+    atrium = copy_object(f"A{context.scene.approach}_Atrium", "atrium")
+    atrium.select_set(True)
+    bpy.context.view_layer.objects.active = atrium
+    scale_rotate_translate_object(context, atrium, "Mitral", ratio=1)
+    return atrium
+   
+def add_aorta(context):
+    """Copy aorta and place it above the aortic valve as a separate object"""
+    aorta = copy_object(f"A{context.scene.approach}_Aorta", "aorta")
+    aorta.select_set(True)
+    bpy.context.view_layer.objects.active = aorta
+    scale_rotate_translate_object(context, aorta, "Aortic", ratio=1)
+    return aorta
+
+def create_porous_valve_zones(context, valve_mode, valve_strings):
+    """Add separate porous zone objects (valves, atrium and aorta) into workspace"""
+    # Create new object by copying it from existing object.
+    for obj_str in valve_strings:
+        new_obj = copy_object(obj_str, f"p_{obj_str}")
+        new_obj.select_set(True)
+        bpy.context.view_layer.objects.active = new_obj
+        scale_rotate_translate_object(context, new_obj, valve_mode = valve_mode, ratio = 1)
+
 class MESH_OT_Quick_Recon(bpy.types.Operator):
     """Quick geometrical reconstruction of all ventricles containing all steps of the reconstruction algorithm in one execution"""
     bl_idname = 'heart.quick_recon'
@@ -1593,23 +1570,7 @@ class PANEL_Setup_Variables(bpy.types.Panel):
         layout.prop(context.scene, "connection_twist", text="Twist during connecting algorithm for the function looptools_bridge.")
         row = layout.row()
         layout.prop(context.scene, "inset_faces_refinement_steps", text="Refinement steps for insetting faces during connection algorithm.")
-
-class PANEL_Objects(bpy.types.Panel):
-    bl_label = "Surrounding objects"
-    bl_idname = "PT_surroundings"
-    bl_space_type = 'VIEW_3D'
-    bl_region_type = 'UI'
-    bl_category = 'Herz'
-    bl_option = {'DEFALUT_CLOSED'}
-    def draw(self, context):
-        layout = self.layout
-        row = layout.row()
-        layout.operator('heart.add_porous_zones', text= "Add porous zone valves", icon = 'ALIGN_FLUSH')
-        row = layout.row()
-        layout.operator('heart.add_atrium', text= "Add atrium", icon = 'CURSOR')
-        row = layout.row()
-        layout.operator('heart.add_aorta', text= "Add aorta", icon = 'MESH_CYLINDER')
-       
+      
 class PANEL_Pipeline(bpy.types.Panel):
     bl_label = "Geometric ventricle reconstruction pipeline"
     bl_idname = "PT_Pipeline"
@@ -1666,8 +1627,8 @@ class PANEL_Dev_tools(bpy.types.Panel):
    
 classes = [
     PANEL_Position_Ventricle, MESH_OT_ApproachSelection,
-    PANEL_Valves, PANEL_Poisson, PANEL_Objects, PANEL_Pipeline, PANEL_Setup_Variables,  PANEL_Dev_tools, MESH_OT_get_node, MESH_OT_ventricle_rotate, MESH_OT_poisson, MESH_OT_build_valve, MESH_OT_create_valve_orifice, 
-    MESH_OT_support_struct, MESH_OT_connect_valves, MESH_OT_Add_Atrium, MESH_OT_Add_Aorta, MESH_OT_Porous_zones, MESH_OT_Ventricle_Sort, MESH_OT_Quick_Recon, MESH_OT_remove_basal,
+    PANEL_Valves, PANEL_Poisson, PANEL_Pipeline, PANEL_Setup_Variables,  PANEL_Dev_tools, MESH_OT_get_node, MESH_OT_ventricle_rotate, MESH_OT_poisson, MESH_OT_build_valve, MESH_OT_create_valve_orifice, 
+    MESH_OT_support_struct, MESH_OT_connect_valves, MESH_OT_Ventricle_Sort, MESH_OT_Quick_Recon, MESH_OT_remove_basal,
     MESH_OT_create_basal, MESH_OT_connect_apical_and_basal, MESH_OT_Ventricle_Interpolation, MESH_OT_Add_Vessels_Valves, MESH_DEV_volumes, MESH_DEV_indices, MESH_DEV_edge_index, MESH_DEV_check_node_connectivity,
 ]
   
