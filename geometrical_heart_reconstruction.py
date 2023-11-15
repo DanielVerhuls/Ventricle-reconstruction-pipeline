@@ -1,7 +1,7 @@
 bl_info = {
     "name" : "Geometrical heart reconstrucion", 
     "author" : "Daniel Verhuelsdonk",
-    "version" : (1, 280),
+    "version" : (1, 281),
     "blender" : (3, 1, 0),
     "location" : "Operator Search",
     "description": "Panel and operators to geometrically reconstruct the upper heart shape",
@@ -187,81 +187,11 @@ def get_rotation_angle(numerator, denominator):
         elif numerator < 0: angle = - math.pi 
     return angle
 
-class MESH_OT_cut_edge_loops(bpy.types.Operator):
-    """Remove the basal region of the ventricle by deleting edge loops of the ventricle from the pre-selected top position."""
-    bl_idname = 'heart.cut_edge_loops'
-    bl_label = 'Remove the basal region of the ventricle by deleting edge loops of the ventricle from the pre-selected top position.'
-    def execute(self, context): 
-        selected_objects = context.selected_objects
-        cut_edge_loops(context, selected_objects)
-        for obj in selected_objects: obj.select_set(True) # Reselect objects.
-        return{'FINISHED'}  
-
-def cut_edge_loops(context, selected_objects):
-    """Function to remove the upper edge loops of the largest ventricle."""
-    for obj in selected_objects: obj.select_set(False) # Initialize objects deselected.
-    for obj in selected_objects:
-        # Select object,set is as active and deselect all its vertices.
-        obj.select_set(True)
-        bpy.context.view_layer.objects.active = obj
-        deselect_object_vertices(obj)
-        # Cut basal region off of the ventricle.
-        dissolve_edge_loops(context, obj)
-        obj.select_set(False) # Deselect object, after removing basal region.
-
-def get_neighbour_vertices(v): # !!! can maybe be shortend to one line.
+def get_neighbour_vertices(v):
     """Return neighbouring vertices of a vertex."""
     neighbours_index = []
     for e in v.link_edges: neighbours_index.append(e.other_vert(v).index)
     return neighbours_index
-
-def dissolve_edge_loops(context, obj):  #!!! old
-    """Dissolve a given amount of edge loops."""
-    bpy.context.tool_settings.mesh_select_mode = (True, False, False) # Make sure vertex mode is selected in edit mode.
-    bm = transfer_data_to_mesh(obj) # Transfer object in mesh data.
-    # Initialize neighbour vertices list with a single vertex.
-    inner_loop = [] # Inner loop.
-    inner_loop.append(context.scene.top_index) # Inner loop starts with the top position vertex.
-    # Dissolve an amount of edge loops around a selected point.
-    for i in range(context.scene.amount_of_cuts + 1):
-        outer_loop = [] # Neighbouring loop of the inner loop.
-        # Find vertex in top-positon.
-        for v in bm.verts:
-            if v.index in inner_loop:
-                v.select = True  # Select vertices to dissolve.
-                neighbours_index = get_neighbour_vertices(v) 
-                for n in neighbours_index:# Get neighbours of the current vertex in the inner loop.
-                    if n not in outer_loop: outer_loop.append(n)     
-            else: v.select = False
-        # Update outer loop in inner loop for the next timestep.
-        inner_loop = outer_loop
-    bm.to_mesh(obj.data) # Update geometry after deleting face.
-    # Dissolve faces.
-    bpy.ops.object.mode_set(mode='EDIT')  
-    bpy.ops.mesh.dissolve_faces()
-    bpy.ops.object.mode_set(mode='OBJECT') 
-    # Load mesh data from current object for second operation.
-    bm_two = bmesh.new()       
-    bm_two.from_mesh(obj.data)
-    bm_two.faces.ensure_lookup_table()
-    # Get currently selected verts. This should be the vertices of the last loop .
-    selected_verts = [v.index for v in bm_two.verts if v.select]
-    # Delete last remaining face between last loop.
-    bpy.ops.object.mode_set(mode='EDIT') 
-    bpy.ops.mesh.delete(type='FACE')
-    bpy.ops.object.mode_set(mode='OBJECT') 
-    # Reselect vertices of edge loop after face removal.
-    for v in obj.data.vertices:
-        if v.index in selected_verts: v.select = True
-        else: v.select = False
-
-    # Save upper apical edge loop in a vertex group to be selected again later on.
-    bm = transfer_data_to_mesh(obj)
-    marked_verts = [v.index for v in bm.verts if v.select]
-    vg_upper_apical = "upper_apical_edge_loop"
-    vg_orifice = obj.vertex_groups.new(name = vg_upper_apical)
-    vg_orifice.add(marked_verts, 1, 'ADD' )
-    return vg_orifice
     
 class MESH_OT_remove_basal(bpy.types.Operator): 
     """Remove the basal region using a threshold value."""
@@ -1654,8 +1584,6 @@ class PANEL_Poisson(bpy.types.Panel):
     def draw(self, context):
         layout = self.layout      
         row = layout.row()
-        row.operator('heart.cut_edge_loops', text= "Remove edge loops from top position", icon = 'LIBRARY_DATA_OVERRIDE') 
-        row = layout.row()
         row.operator('heart.remove_basal', text= "Remove basal region", icon = 'LIBRARY_DATA_OVERRIDE') 
         row = layout.row()
         layout.operator('heart.poisson', text= "Apply Poisson surface reconstruction", icon = 'PROP_ON')
@@ -1687,8 +1615,7 @@ class PANEL_Setup_Variables(bpy.types.Panel):
         layout.prop(context.scene, "inset_faces_refinement_steps", text="Refinement steps for insetting faces during connection algorithm.")
         row = layout.row()
         layout.prop(context.scene, "connection_twist", text="Twist during connecting algorithm for the function looptools_bridge.")
-        row = layout.row()
-        row.prop(context.scene, 'amount_of_cuts', text="Amount of cut edge loops")  #!!! kann raus
+
 
 class PANEL_Objects(bpy.types.Panel):
     bl_label = "Surrounding objects"
@@ -1765,7 +1692,7 @@ class PANEL_Dev_tools(bpy.types.Panel):
 classes = [
     PANEL_Position_Ventricle, MESH_OT_ApproachSelection,
     PANEL_Valves, PANEL_Poisson, PANEL_Objects, PANEL_Pipeline, PANEL_Setup_Variables,  PANEL_Dev_tools, MESH_OT_get_node, MESH_OT_ventricle_rotate, MESH_OT_poisson, MESH_OT_build_valve, MESH_OT_create_valve_orifice, 
-    MESH_OT_support_struct, MESH_OT_connect_valves, MESH_OT_cut_edge_loops, MESH_OT_Add_Atrium, MESH_OT_Add_Aorta, MESH_OT_Porous_zones, MESH_OT_Ventricle_Sort, MESH_OT_Quick_Recon, MESH_OT_remove_basal,
+    MESH_OT_support_struct, MESH_OT_connect_valves, MESH_OT_Add_Atrium, MESH_OT_Add_Aorta, MESH_OT_Porous_zones, MESH_OT_Ventricle_Sort, MESH_OT_Quick_Recon, MESH_OT_remove_basal,
     MESH_OT_create_basal, MESH_OT_connect_apical_and_basal, MESH_OT_Ventricle_Interpolation, MESH_OT_Add_Vessels_Valves, MESH_DEV_volumes, MESH_DEV_indices, MESH_DEV_edge_index, MESH_DEV_test_function, MESH_DEV_check_node_connectivity,
 ]
   
@@ -1779,7 +1706,6 @@ def register():
     bpy.types.Scene.height_plane = bpy.props.FloatProperty(name="Cut-off value for the creation of the reference basal region", default=40,  min = 0.01)
     bpy.types.Scene.min_valves = bpy.props.FloatProperty(name="Minimal z-value of valves", default=45)
     bpy.types.Scene.max_apical = bpy.props.FloatProperty(name="Maximal z-value of apical region after cutting", default=20)
-    bpy.types.Scene.amount_of_cuts = bpy.props.IntProperty(name="Amount of edge loop cuts from top position", default=10,  min = 2) # !!! old
 
     bpy.types.Scene.remove_basal_threshold = bpy.props.FloatProperty(name="Threshold for the removal of the basal region.", default=28.5,  min = 0)
     # Possion algorithm.
