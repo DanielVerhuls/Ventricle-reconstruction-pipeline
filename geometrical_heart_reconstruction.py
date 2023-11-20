@@ -18,7 +18,7 @@ import numpy as np
 import open3d as o3d
 scene = bpy.types.Scene
 
-dev_env_tools = False
+dev_env_tools = True
 
 # Generally used functions.
 def cons_print(data):
@@ -256,7 +256,7 @@ def remove_basal_region(context, obj, del_nodes):
     bpy.ops.mesh.delete(type='FACE') 
     # Refinement
     vg_orifice = refine_upper_apical_edge_loop(obj, vg_orifice)
-    smooth_apical_region(context, obj, vg_orifice)
+    smooth_apical_region(obj, vg_orifice)
     # Close function.
     obj.select_set(False)
     return del_nodes
@@ -266,12 +266,25 @@ def refine_upper_apical_edge_loop(obj, vg_orifice):
     # Select upper apical edge loop with vertex group.
     bpy.ops.object.vertex_group_set_active(group=vg_orifice.name)
     bpy.ops.object.vertex_group_select()
-    # Smooth highest edge loop of apical region aligning the vertices onto a plane. !!! hat noch verbesserungsbedarf. Alle punkte auf einheitliche Hoehe waere gut.
+    # Smooth highest edge loop of apical region aligning the vertices onto a plane.
+    change_to_viewpoint('TOP') # Change view to top view.
     bpy.ops.mesh.looptools_relax(input='selected', interpolation='linear', iterations='5', regular=True) # Reduce spikes on the highest edge loop.
-    bpy.ops.mesh.looptools_flatten(influence=90, lock_x=False, lock_y=False, lock_z=False, plane='best_fit', restriction='none') # Flatten highest edge loop onto a plane
+    bpy.ops.mesh.looptools_flatten(influence=90, lock_x=True, lock_y=True, lock_z=False, plane='view', restriction='none')
     # Subdivide last edge loop   
     return subdivide_last_edge_loop(obj, vg_orifice)
     
+def change_to_viewpoint(alignment_type):
+    """Update 3D view"""
+    for area in bpy.context.screen.areas:
+        if area.type == 'VIEW_3D':
+            ctx = {
+                "window": bpy.context.window, # current window, could also copy context
+                "area": area, # our 3D View (the first found only actually)
+                "region": None # just to suppress PyContext warning, doesn't seem to have any effect
+            }
+            bpy.ops.view3d.view_axis(ctx, type=alignment_type, align_active=False)
+            area.spaces.active.region_3d.update()  # <---
+
 def subdivide_last_edge_loop(obj, vg_orifice):
     """Subdivide last edge loop in two steps before bridging for a better transition between coarse apical and fine basal mesh"""
     # Select upper apical edge loop with vertex group.
@@ -295,7 +308,7 @@ def subdivide_last_edge_loop(obj, vg_orifice):
     vg_orifice.add(selected_verts, 1, 'ADD' )
     return vg_orifice
 
-def smooth_apical_region(context, obj, vg_orifice):
+def smooth_apical_region(obj, vg_orifice):
     """Smooth apical region in the region of the cut"""
     deselect_object_vertices(obj)
     bpy.ops.object.mode_set(mode='EDIT')
@@ -309,7 +322,7 @@ def smooth_apical_region(context, obj, vg_orifice):
     # # Continuously weaker smoothing operations with more nodes to create a smooth transition between smoothed and unsmoothed region.
     n_smooth_iter = 3
     for i in range(n_smooth_iter): 
-        bpy.ops.mesh.vertices_smooth(factor=0.5, repeat=n_smooth_iter+2-i)
+        bpy.ops.mesh.vertices_smooth(factor=0.5, repeat=n_smooth_iter+1-i)
         bpy.ops.mesh.select_more()
         bpy.ops.object.vertex_group_deselect()
     bpy.ops.object.mode_set(mode='OBJECT')
@@ -1464,6 +1477,19 @@ class MESH_OT_ApproachSelection(bpy.types.Operator):
         if self.approach_enum == "Op_A5": context.scene.approach = 5
         return {'FINISHED'} 
 
+class MESH_DEV_test_function(bpy.types.Operator):
+    """Test function for development"""
+    bl_idname = 'heart.test_function'
+    bl_label = 'Test function for development'
+    def execute(self, context):
+        test_function(context)
+        return{'FINISHED'}
+    
+def test_function(context):
+    """"""
+    cons_print(f"Running test function")
+    bpy.ops.view3d.view_axis(type='TOP', align_active=False, relative=False)
+
 class PANEL_Position_Ventricle(bpy.types.Panel):
     bl_label = "Ventricle position (mm)"
     bl_idname = "PT_Ventricle"
@@ -1620,6 +1646,8 @@ class PANEL_Dev_tools(bpy.types.Panel):
         layout.operator('heart.dev_check_edges', text= "Get edge index", icon = 'ARROW_LEFTRIGHT')
         row = layout.row()
         layout.operator('heart.dev_check_node_connectivity', text= "Node-connectivity check", icon = 'CHECKMARK') 
+        row = layout.row()
+        layout.operator('heart.test_function', text= "Test function", icon = 'CHECKMARK') 
    
 classes = [
     PANEL_Position_Ventricle, MESH_OT_ApproachSelection,
@@ -1628,7 +1656,7 @@ classes = [
     MESH_OT_create_basal, MESH_OT_connect_apical_and_basal, MESH_OT_Ventricle_Interpolation, MESH_OT_Add_Vessels_Valves, MESH_OT_check_node_connectivity,
 ]
 
-dev_classes = [PANEL_Poisson, MESH_OT_poisson, MESH_OT_create_valve_orifice, MESH_OT_connect_valves, PANEL_Dev_tools, MESH_DEV_volumes, MESH_DEV_indices, MESH_DEV_edge_index]
+dev_classes = [PANEL_Poisson, MESH_OT_poisson, MESH_OT_create_valve_orifice, MESH_OT_connect_valves, PANEL_Dev_tools, MESH_DEV_volumes, MESH_DEV_indices, MESH_DEV_edge_index, MESH_DEV_test_function]
   
 def register():
     # Position variables.
