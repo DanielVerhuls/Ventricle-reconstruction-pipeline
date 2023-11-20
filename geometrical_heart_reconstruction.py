@@ -290,7 +290,7 @@ def subdivide_last_edge_loop(obj, vg_orifice):
     bm = transfer_data_to_mesh(obj)
     selected_verts = [v.index for v in bm.verts if v.select] # Re-read selected vertices.
     vg_name = vg_orifice.name
-    if vg_orifice is not None: obj.vertex_groups.remove(vg_orifice)
+    if vg_orifice is not None: obj.vertex_groups.remove(vg_orifice) # Delete previous vertex group to make room for new one.
     vg_orifice = obj.vertex_groups.new(name = vg_name)
     vg_orifice.add(selected_verts, 1, 'ADD' )
     return vg_orifice
@@ -988,7 +988,7 @@ def combine_apical_and_basal_region(context, basal_regions, reference, selected_
         obj.hide_set(True)
     reference.select_set(False)
     # Apply connecting operation for reference and save connecting edges used in the connection.
-    prepare_geometry_for_bridging(context, reference, basal_regions[0]) # Prepare geometry for bridging by removing the original basal region and replacing it with the reconstructed basal region.
+    prepare_geometry_for_bridging(reference, basal_regions[0]) # Prepare geometry for bridging by removing the original basal region and replacing it with the reconstructed basal region.
     edge_indices_bridge = bridge_edges_reference(context, reference) # Create initial connection between the upper apical and lower basal edge loop.
     inset_faces_smooth(context) # Refine connection by separating long connection faces into more uniformly sized faces.
     edge_indices_triangulate = triangulate_connection(True, reference, ref_edge_indices=[]) # Triangulate connection faces saving newly created edges.
@@ -999,7 +999,7 @@ def combine_apical_and_basal_region(context, basal_regions, reference, selected_
     for counter, obj in enumerate(selected_objects):
         basal = basal_regions[get_valve_state_index(context, counter, frame_EDV)] # Choose basal region.
         # Apply connecting operation from reference.
-        prepare_geometry_for_bridging(context, obj, basal) 
+        prepare_geometry_for_bridging(obj, basal) 
         bridge_edges_ventricle(obj, edge_indices_bridge)
         inset_faces_smooth(context)
         # Remove faces before triangulation.
@@ -1035,7 +1035,7 @@ def get_valve_state_index(context, counter, frame_EDV):
     if counter in frames_mv_4: return 4
     else: return 0
 
-def prepare_geometry_for_bridging(context, obj, final_basal_region):
+def prepare_geometry_for_bridging(obj, final_basal_region):
     """Prepare the individual ventricle geometries for the bridging process. The original basal region is removed and the remaining apical region is joined into one object with the reconstructed basal region"""
     current_basal = copy_object(final_basal_region.name, 'temp') # Copy basal region for current object.
     # Change selection such that the copy of the basal region is merged into the input-object (obj).
@@ -1049,7 +1049,7 @@ def prepare_geometry_for_bridging(context, obj, final_basal_region):
         if group.name == "upper_apical_edge_loop":
             vg_orifice = group
             break
-    subdivide_last_edge_loop(obj, vg_orifice) # Apply subdivide to smooth out further connection. This complicates the surface reconstruction for the low resolution A3, so it is turned off.
+    subdivide_last_edge_loop(obj, vg_orifice) # Apply subdivide to smooth out further connection. 
     # Combine both geometries.
     current_basal.select_set(True)
     bpy.ops.object.join()
@@ -1525,7 +1525,7 @@ class PANEL_Valves(bpy.types.Panel):
             row = layout.row()
             layout.operator('heart.support_struct',  text= "Build support structure around valves", icon = 'PROP_ON')
                 
-class PANEL_Poisson(bpy.types.Panel): #!!! unnecessary for final version of addon
+class PANEL_Poisson(bpy.types.Panel): 
     bl_label = "Poisson"
     bl_idname = "PT_Poisson"
     bl_space_type = 'VIEW_3D'
@@ -1585,15 +1585,13 @@ class PANEL_Pipeline(bpy.types.Panel):
         row = layout.row()
         row.label(text= "Setup valves") #!!! als button der diesen reiter oeffnet
         row = layout.row()
+        row.label(text= "Setup algorithm variables") #!!! als button der diesen reiter oeffnet
+        row = layout.row()
         layout.operator('heart.ventricle_interpolation', text= "Interpolate ventricle", icon = 'IPO_EASE_IN')
         row = layout.row()
         row.label(text= f"Current approach: A{context.scene.approach}")
         row = layout.row()
         layout.operator("wm.approach_selection")
-        row = layout.row()
-        row.label(text= "Setup valves") #!!! als button der diesen reiter oeffnet
-        row = layout.row()
-        row.label(text= "Setup other variables(RR-duration, und algorithm parameters-> sollte aus sort errechnet werden)") #!!! als button der diesen reiter oeffnet
         row = layout.row()
         row.operator('heart.remove_basal', text= "Remove basal region", icon = 'LIBRARY_DATA_OVERRIDE')  
         row = layout.row()
@@ -1660,7 +1658,7 @@ def register():
     bpy.types.Scene.poisson_depth = bpy.props.IntProperty(name="Depth of possion algorithm", default=10,  min = 1)
     # Interpolation variables.
     bpy.types.Scene.time_rr = bpy.props.FloatProperty(name="Time RR-duration", default=0.6,  min = 0.01)
-    bpy.types.Scene.time_diastole = bpy.props.FloatProperty(name="Time diastole", default=0.35,  min = 0.01) # !!!Compute automatically using the volumes and rr-duration. Automatische sortierung mit ESV am anfang waere auch gut
+    bpy.types.Scene.time_diastole = bpy.props.FloatProperty(name="Time diastole", default=0.35,  min = 0.01) # !!!Compute automatically using the volumes and rr-duration. 
     bpy.types.Scene.frames_ventricle = bpy.props.IntProperty(name="Amount of frames ventricle after interpolation", default=10,  min = 10)
     # Connection algorithm variables.
     bpy.types.Scene.reference_object_name = bpy.props.StringProperty(name="Name of the reference object", default = "ventricle_0")
