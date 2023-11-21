@@ -255,13 +255,13 @@ def remove_basal_region(context, obj, del_nodes):
     bpy.ops.object.mode_set(mode='EDIT') 
     bpy.ops.mesh.delete(type='FACE') 
     # Refinement
-    vg_orifice = refine_upper_apical_edge_loop(obj, vg_orifice)
+    refine_upper_apical_edge_loop(vg_orifice)
     smooth_apical_region(obj, vg_orifice)
     # Close function.
     obj.select_set(False)
     return del_nodes
 
-def refine_upper_apical_edge_loop(obj, vg_orifice):
+def refine_upper_apical_edge_loop(vg_orifice):
     """Flatten the upper apical edge loop"""
     # Select upper apical edge loop with vertex group.
     bpy.ops.object.vertex_group_set_active(group=vg_orifice.name)
@@ -270,9 +270,7 @@ def refine_upper_apical_edge_loop(obj, vg_orifice):
     change_to_viewpoint('TOP') # Change view to top view.
     bpy.ops.mesh.looptools_relax(input='selected', interpolation='linear', iterations='5', regular=True) # Reduce spikes on the highest edge loop.
     bpy.ops.mesh.looptools_flatten(influence=90, lock_x=True, lock_y=True, lock_z=False, plane='view', restriction='none')
-    # Subdivide last edge loop   
-    return subdivide_last_edge_loop(obj, vg_orifice)
-    
+
 def change_to_viewpoint(alignment_type):
     """Update 3D view"""
     for area in bpy.context.screen.areas:
@@ -769,7 +767,7 @@ def create_basal_region_for_object(context, reference_copy):
     if not compute_height_plane(context): return False # Compute height plane for the removal of the apical region.
     # Poisson with remeshing and triangulation.
     poisson_basal = create_poisson_from_object_pointcloud(context, reference_copy)
-    voxel_size = min(context.scene.aortic_radius, context.scene.mitral_radius_long, context.scene.mitral_radius_small) / 5 # Compute voxel_size for remesh and merge dependent of the smallest valve size.
+    voxel_size = min(context.scene.aortic_radius, context.scene.mitral_radius_long, context.scene.mitral_radius_small) / 4 # Compute voxel_size for remesh and merge dependent of the smallest valve size.
     apply_voxel_remesh(voxel_size) # Apply Remesh for better mesh quality (remove small mesh elements with high cell skewness).
     # Triangulate remesh.
     bpy.ops.object.modifier_add(type='TRIANGULATE')
@@ -792,7 +790,7 @@ def compute_height_plane(context):
     elif context.scene.min_valves < 1.025 * context.scene.max_apical: # Basal and apical region lie very close to one another. This could lead to large kinks in the geometry.
         cons_print("Info: The basal and apical region are very close to one another. The geometry may contain large kinks especially in the connection between those regions. Try a higher dissolve loop number or higher z-value for the input valves.")
     else: pass # Basal and apical region have enough distance.
-    context.scene.height_plane = (2 * context.scene.max_apical + context.scene.min_valves) / 3 # Choose z-value between lowest valve vertex and highest basal vertex.
+    context.scene.height_plane = (context.scene.max_apical + context.scene.min_valves) / 2 # Choose z-value between lowest valve vertex and highest basal vertex.
     return True
 
 def apply_voxel_remesh(voxel_size):
@@ -918,7 +916,7 @@ def smooth_basal_region(context, voxel_size):
     select_inner_basal_vertices(context)
     bpy.ops.object.mode_set(mode='EDIT') 
     # Merge close nodes and smooth them.
-    if context.scene.approach == 3 or context.scene.approach == 4: bpy.ops.mesh.remove_doubles(threshold=voxel_size / 2, use_sharp_edge_from_normals=False, use_unselected=False)
+    if context.scene.approach == 3 or context.scene.approach == 4: bpy.ops.mesh.remove_doubles(threshold= voxel_size *0.9, use_sharp_edge_from_normals=False, use_unselected=False)
     bpy.ops.mesh.vertices_smooth(factor=0.75, repeat=10)
     # Select valve orifice edge loops for a better smoothing transition between valves and basal region.
     bpy.ops.object.vertex_group_set_active(group=str("Aortic_orifice"))
@@ -933,10 +931,13 @@ def smooth_basal_region(context, voxel_size):
     bpy.ops.object.vertex_group_set_active(group=str("lower_basal_edge_loop"))
     bpy.ops.object.vertex_group_select()
     bpy.ops.mesh.looptools_relax(input='selected', interpolation='linear', iterations='5', regular=True)
-    # Smooth inner vertices again.
+    # Smooth inner vertices in an iterative process, removing small cells in the process.
     select_inner_basal_vertices(context)
     bpy.ops.object.mode_set(mode='EDIT')
-    bpy.ops.mesh.vertices_smooth(factor=0.5, repeat=10)
+    smooth_basal_iterations = 5
+    for i in range(smooth_basal_iterations):
+        bpy.ops.mesh.remove_doubles(threshold= voxel_size, use_sharp_edge_from_normals=False, use_unselected=False)
+        bpy.ops.mesh.vertices_smooth(factor=0.5, repeat=10)
     bpy.ops.object.mode_set(mode='OBJECT') 
 
 def select_inner_basal_vertices(context):
@@ -990,7 +991,7 @@ def mesh_connect_apical_and_basal(context):
             curr_basal.hide_set(True)
     # Create initial connection using a reference copy.
     reference = copy_object(bpy.types.Scene.reference_object_name, "reference")
-    combine_apical_and_basal_region(context, basal_regions, reference, selected_objects)
+    if not combine_apical_and_basal_region(context, basal_regions, reference, selected_objects): return False
     return True
 
 def combine_apical_and_basal_region(context, basal_regions, reference, selected_objects):
@@ -1008,6 +1009,11 @@ def combine_apical_and_basal_region(context, basal_regions, reference, selected_
     bpy.data.objects.remove(reference, do_unlink=True) # Cleanup: Remove reference object.
     # Compute the frame of the end diastole. Necessary for interpolated mitral valve.
     frame_EDV = round(context.scene.time_diastole / context.scene.time_rr *  context.scene.frames_ventricle) 
+    # Compute volume list for computation of the intensity of smoothing of the connection between basal and apical region.
+    volumelist = compute_volumes(selected_objects, False)
+    if volumelist.index(min(volumelist)) > volumelist.index(max(volumelist)) or volumelist.index(min(volumelist)) != 0: # If list is not sorted, interrupt function.
+        cons_print(f"Ventricles not sorted. Interrupting...")
+        return False
     # Apply connecting-operation for remaining ventricle geometries.
     for counter, obj in enumerate(selected_objects):
         basal = basal_regions[get_valve_state_index(context, counter, frame_EDV)] # Choose basal region.
@@ -1027,10 +1033,12 @@ def combine_apical_and_basal_region(context, basal_regions, reference, selected_
         bpy.ops.mesh.select_all(action='SELECT')
         bpy.ops.mesh.edge_face_add()
         bpy.ops.object.mode_set(mode='OBJECT')
-        # Smooth connection.
-        smooth_connection_and_basal_region(context, obj)
+        # Smooth connection dependent on which geometry is smoothed.
+        smoothing_strength = compute_smoothing_strength_connection(counter, volumelist)
+        smooth_connection_and_basal_region(context, obj, smoothing_strength)
         obj.hide_set(True)  
     for obj in selected_objects: obj.hide_set(False) # Cleanup: Unhide objects.
+    return True
 
 def get_valve_state_index(context, counter, frame_EDV):
     """Return the index of the basal region to be used for the given timestep"""
@@ -1141,7 +1149,21 @@ def triangulate_connection(bool_ref, obj, ref_edge_indices):
         bpy.ops.object.mode_set(mode='OBJECT') 
     return edges_vert_indices_tri
 
-def smooth_connection_and_basal_region(context, obj): 
+def compute_smoothing_strength_connection(counter, volumelist):
+    """Compute how strongly the connection between basal and apical region will be smoothed."""
+    max_index = volumelist.index(max(volumelist)) # Index of EDV in volume list.
+    min_index = volumelist.index(min(volumelist)) # Index of ESV in volume list.
+    if counter >= min_index and counter <= max_index:
+        smoothing_strength = 1 - (counter - min_index) * 1 / (max_index - min_index)
+    elif counter > max_index:
+        smoothing_strength = (counter - max_index) * 1 / (len(volumelist)- max_index)
+    else: 
+        cons_print(f"Mistake in operation of smoothing strength connection!!!!")
+        smoothing_strength = 1
+    cons_print(f"Smoothing_streng: {smoothing_strength} for ventricle_{counter}")
+    return smoothing_strength
+
+def smooth_connection_and_basal_region(context, obj, smoothing_strength): 
     """Smooth basal ventricle region excluding the valves"""
     deselect_object_vertices(obj) # Reset node selection.
     # Select all vertices between the lowest valve vertex and the highest basal region vertex.
@@ -1150,12 +1172,14 @@ def smooth_connection_and_basal_region(context, obj):
         vertex_coords = obj.matrix_world @ v.co 
         if vertex_coords[2] > context.scene.max_apical: v.select = True
     bm.to_mesh(obj.data)
-    bpy.ops.object.mode_set(mode='EDIT')  
+    bpy.ops.object.mode_set(mode='EDIT') 
     # Select all nodes inside the connection.
     bpy.ops.object.vertex_group_set_active(group=str("lower_basal_edge_loop"))
     bpy.ops.object.vertex_group_select()  
+    bpy.ops.object.vertex_group_set_active(group=str("upper_apical_edge_loop"))
+    bpy.ops.object.vertex_group_select()  
     # Select edge loops below the connection. Selecting all apical nodes would greatly shrink the ventricle volume in that region.
-    smoothing_operations = 5
+    smoothing_operations = 3
     for i in range(smoothing_operations):  # Iteratively smooth the selected nodes. This especially smooths the transition between connection and apical nodes.
         bpy.ops.mesh.select_more() # Select edge loops until reaching an edgeloop, that was not subdivided during the removal of the basal region.
         # Exclude valve nodes in the selection process.
@@ -1163,8 +1187,12 @@ def smooth_connection_and_basal_region(context, obj):
         bpy.ops.object.vertex_group_deselect()
         bpy.ops.object.vertex_group_set_active(group=str("MV"))
         bpy.ops.object.vertex_group_deselect()
-        # Continuously weaker smoothing. As hard smoothing creates kinks between smoothed nodes and unsmoothed nodes.
-        bpy.ops.mesh.vertices_smooth(factor=0.5, repeat=smoothing_operations+5-i)
+        if i == 0:
+            smooth_iter = round(50 * smoothing_strength) + smoothing_operations  # Strong smoothing initially.
+        else:
+            smooth_iter = round(smoothing_strength * 4 * (smoothing_operations-i)) # Weaker smoothing after first iteration. As hard smoothing creates kinks between smoothed nodes and unsmoothed nodes.
+        cons_print(f"Smoothing iterations: {smooth_iter} on object {obj.name} with strength {smoothing_strength}")
+        bpy.ops.mesh.vertices_smooth(factor=0.5, repeat=smooth_iter) # Execute smoothing
     bpy.ops.object.mode_set(mode='OBJECT')
 
 class MESH_OT_Ventricle_Sort(bpy.types.Operator): 
@@ -1177,7 +1205,8 @@ class MESH_OT_Ventricle_Sort(bpy.types.Operator):
 
 def sort_ventricles(selected_objects):
     """Sort ventricles by volume starting with minimal volume (End-systolic volume)"""
-    volumes = get_volumes(selected_objects, True)
+    cons_print(f"Sorting ventricle geometries starting in End-systolic state.")
+    volumes = compute_volumes(selected_objects, False)
     val, idx = min((val, idx) for (idx, val) in enumerate(volumes))
     # Free up names by renaming the objects to temporary names.
     for counter, obj in enumerate(selected_objects): obj.name = f"temp_ven_{counter}" 
@@ -1328,16 +1357,20 @@ class MESH_DEV_volumes(bpy.types.Operator):
     bl_idname = 'heart.dev_volumes'
     bl_label = 'Compute volumes of selected objects.'
     def execute(self, context):
-        get_volumes(bpy.context.selected_objects, True)
+        compute_volumes(bpy.context.selected_objects, True)
         return{'FINISHED'}
 
-def get_volumes(objects, bool_print):
+def compute_volumes(objects, bool_print):
     """Print each volume and surface area of a given list of objects"""
     volumelist = []
     for obj in objects:
         volume, area = compute_volume_area(obj)
         volumelist.append(volume)
         if bool_print: cons_print(f"{obj.name} with volume: {round(volume/1000, 4)} ml and surface area: {round(area/100, 4)} mm^2.")
+    if bool_print:
+        cons_print(f"Max volume (EDV): {max(volumelist)/1000} ml at position: {volumelist.index(max(volumelist))}")  
+        cons_print(f"Min volume (ESV): {min(volumelist)/1000} ml at position: {volumelist.index(min(volumelist))}")  
+        cons_print(f"Stroke volume: {(max(volumelist)-min(volumelist))/1000} ml")
     return volumelist
 
 def compute_volume_area(obj):
@@ -1618,6 +1651,9 @@ class PANEL_Pipeline(bpy.types.Panel):
         row.label(text= f"Current approach: A{context.scene.approach}")
         row = layout.row()
         layout.operator("wm.approach_selection")
+        row = layout.row()
+        row = layout.row()
+        row = layout.row()
         row = layout.row()
         row.operator('heart.remove_basal', text= "Remove basal region", icon = 'LIBRARY_DATA_OVERRIDE')  
         row = layout.row()
