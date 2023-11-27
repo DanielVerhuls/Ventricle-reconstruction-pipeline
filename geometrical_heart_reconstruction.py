@@ -1160,7 +1160,7 @@ def compute_smoothing_strength_connection(counter, volumelist):
     else: 
         cons_print(f"Mistake in operation of smoothing strength connection!!!!")
         smoothing_strength = 1
-    cons_print(f"Smoothing_streng: {smoothing_strength} for ventricle_{counter}")
+    cons_print(f"Smoothing_strength: {smoothing_strength} for ventricle_{counter}")
     return smoothing_strength
 
 def smooth_connection_and_basal_region(context, obj, smoothing_strength): 
@@ -1217,7 +1217,7 @@ def sort_ventricles(selected_objects):
         obj.name = f"ventricle_{new_index}" # Rename selected objects.
 
 class MESH_OT_Ventricle_Interpolation(bpy.types.Operator): 
-    """Interpolate ventricle geometry to a larger amount of timesteps"""
+    """(Linearly) Interpolate ventricle geometry to a larger amount of timesteps"""
     bl_idname = 'heart.ventricle_interpolation'
     bl_label = 'Interpolate selected objects.'
     def execute(self, context):
@@ -1303,7 +1303,7 @@ def add_vessels_and_valves(context):
     add_aorta(context)
     add_atrium(context)
     # Porous mitral valve are only inserted in the porous medium approach. For the interpolated mitral valve approach the mitral valve becomes part of the ventricle. Aortic valve is not inserted in A3.
-    if context.scene.approach == 4 or context.scene.approach == 5: create_porous_valve_zones(context, 'Aortic', ['por_AV_imperm', 'por_AV_perm', 'por_AV_res']) 
+    if context.scene.approach == 4 or context.scene.approach == 5: create_porous_valve_zones(context, 'Aortic', ['A4_AV_imperm', 'A4_AV_perm', 'A4_AV_res']) 
     if context.scene.approach == 4: create_porous_valve_zones(context, 'Mitral', ['A4_MV_imperm', 'A4_MV_perm', 'A4_MV_res']) 
 
 def add_atrium(context):
@@ -1325,9 +1325,19 @@ def add_aorta(context):
 
 def create_porous_valve_zones(context, valve_mode, valve_strings):
     """Add separate porous zone objects (valves, atrium and aorta) into workspace"""
-    # Create new object by copying it from existing object.
+    # Set up object name after insertion.
+    if valve_mode == 'Aortic':
+        valve_substring = "av"
+    elif valve_mode == 'Mitral':
+        valve_substring = "mv"
+    else: return False
+    obj_types = ["_perm", "_res", "_imperm"] # Collection of valve types for name setup.
+
     for obj_str in valve_strings:
-        new_obj = copy_object(obj_str, f"p_{obj_str}")
+        for obj_type in obj_types:
+            if obj_type in obj_str: new_name = f"{valve_substring}{obj_type}" # Combine substrings to string of new object.
+        # Create new object by copying it from existing object.
+        new_obj = copy_object(obj_str, new_name)
         new_obj.select_set(True)
         bpy.context.view_layer.objects.active = new_obj
         scale_rotate_translate_object(context, new_obj, valve_mode = valve_mode, ratio = 1)
