@@ -923,11 +923,8 @@ def smooth_basal_region(context, basal, voxel_size):
     bpy.context.view_layer.objects.active = basal
     select_only_inner_basal_vertices()
     bpy.ops.object.mode_set(mode='EDIT')
-
     # Merge close nodes and smooth them.
     if context.scene.approach == 3 or context.scene.approach == 4: bpy.ops.mesh.remove_doubles(threshold= voxel_size * 0.9, use_sharp_edge_from_normals=False, use_unselected=False) # Don't remove for approach 5
-    #if basal.name == "basal_4":
-    #    sad
     bpy.ops.mesh.vertices_smooth(factor=0.75, repeat=10)
     # Select valve orifice edge loops for a better smoothing transition between valves and basal region.
     bpy.ops.object.vertex_group_set_active(group=str("Aortic_orifice"))
