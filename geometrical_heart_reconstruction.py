@@ -782,7 +782,6 @@ def create_basal_region_for_object(context, reference_copy):
     create_valve_orifice(context, "Mitral")
     create_valve_orifice(context, "Aortic")
     basal_regions = insert_valves_into_basal(context, poisson_basal) # Create exact inputs for the valve boundaries and connect it with the remaining basal region.
-    cons_print(f"Amount of basal regions: {len(basal_regions)}")
     for basal in basal_regions: basal.select_set(False)
     for basal in basal_regions: smooth_basal_region(context, basal, voxel_size) # Smooth basal region nodes excluding valves and lower edge loop.
     return basal_regions
@@ -1026,7 +1025,6 @@ def combine_apical_and_basal_region(context, basal_regions, reference, selected_
     # Apply connecting-operation for remaining ventricle geometries.
     for counter, obj in enumerate(selected_objects):
         basal = basal_regions[get_valve_state_index(context, counter, frame_EDV)] # Choose basal region.
-        if counter == 8: return False
         # Apply connecting operation from reference.
         prepare_geometry_for_bridging(obj, basal) 
         bridge_edges_ventricle(obj, edge_indices_bridge)
@@ -1044,8 +1042,8 @@ def combine_apical_and_basal_region(context, basal_regions, reference, selected_
         bpy.ops.mesh.edge_face_add()
         bpy.ops.object.mode_set(mode='OBJECT')
         # Smooth connection dependent on which geometry is smoothed.
-        smoothing_strength = compute_smoothing_strength_connection(counter, volumelist)
-        smooth_connection_and_basal_region(context, obj, smoothing_strength)
+        smoothing_iter_factor = compute_smoothing_iteration_factor_connection(context, counter, volumelist)
+        smooth_connection_and_basal_region(context, obj, smoothing_iter_factor)
         obj.hide_set(True)  
     for obj in selected_objects: obj.hide_set(False) # Cleanup: Unhide objects.
     return True
@@ -1159,21 +1157,23 @@ def triangulate_connection(bool_ref, obj, ref_edge_indices):
         bpy.ops.object.mode_set(mode='OBJECT') 
     return edges_vert_indices_tri
 
-def compute_smoothing_strength_connection(counter, volumelist):
+def compute_smoothing_iteration_factor_connection(context, counter, volumelist):
     """Compute how strongly the connection between basal and apical region will be smoothed."""
     max_index = volumelist.index(max(volumelist)) # Index of EDV in volume list.
     min_index = volumelist.index(min(volumelist)) # Index of ESV in volume list.
     if counter >= min_index and counter <= max_index:
-        smoothing_strength = 1 - (counter - min_index) * 1 / (max_index - min_index)
+        smoothing_iter_factor = 1  - (counter - min_index) * 1 / (max_index - min_index)
     elif counter > max_index:
-        smoothing_strength = (counter - max_index) * 1 / (len(volumelist)- max_index)
+        smoothing_iter_factor = 1  * (counter - max_index) / (len(volumelist)- max_index)
     else: 
-        cons_print(f"Mistake in operation of smoothing strength connection!!!!")
-        smoothing_strength = 1
-    cons_print(f"Smoothing_strength: {smoothing_strength} for ventricle_{counter}")
-    return smoothing_strength
+        cons_print(f"Mistake in computation of smoothing iteration factor for the smoothing of the basal-apical connection.")
+        smoothing_iter_factor = 1
+    smoothing_iter_factor = smoothing_iter_factor * 2 # Increase smoothing iteration factor by factor 2.
+    if context.scene.approach == 5: smoothing_iter_factor = smoothing_iter_factor * 2 # Further increase it for approach 5 as it has a higher vertex density in the basal region.
+    cons_print(f"Smoothing_strength: {smoothing_iter_factor} for ventricle_{counter}")
+    return smoothing_iter_factor
 
-def smooth_connection_and_basal_region(context, obj, smoothing_strength): 
+def smooth_connection_and_basal_region(context, obj, smoothing_iter_factor): 
     """Smooth basal ventricle region excluding the valves"""
     deselect_object_vertices(obj) # Reset node selection.
     # Select all vertices between the lowest valve vertex and the highest basal region vertex.
@@ -1190,6 +1190,8 @@ def smooth_connection_and_basal_region(context, obj, smoothing_strength):
     bpy.ops.object.vertex_group_select()  
     # Select edge loops below the connection. Selecting all apical nodes would greatly shrink the ventricle volume in that region.
     smoothing_operations = 3
+    max_smoothing_iterations = 25
+    min_smoothing_iterations = 2
     for i in range(smoothing_operations):  # Iteratively smooth the selected nodes. This especially smooths the transition between connection and apical nodes.
         bpy.ops.mesh.select_more() # Select edge loops until reaching an edgeloop, that was not subdivided during the removal of the basal region.
         # Exclude valve nodes in the selection process.
@@ -1198,11 +1200,11 @@ def smooth_connection_and_basal_region(context, obj, smoothing_strength):
         bpy.ops.object.vertex_group_set_active(group=str("MV"))
         bpy.ops.object.vertex_group_deselect()
         if i == 0:
-            smooth_iter = round(50 * smoothing_strength) + smoothing_operations  # Strong smoothing initially.
+            smooth_iter = round(max_smoothing_iterations * smoothing_iter_factor) + min_smoothing_iterations # Strong smoothing initially.
         else:
-            smooth_iter = round(smoothing_strength * 4 * (smoothing_operations-i)) # Weaker smoothing after first iteration. As hard smoothing creates kinks between smoothed nodes and unsmoothed nodes.
-        cons_print(f"Smoothing iterations: {smooth_iter} on object {obj.name} with strength {smoothing_strength}")
-        bpy.ops.mesh.vertices_smooth(factor=0.5, repeat=smooth_iter) # Execute smoothing
+            smooth_iter = round(max_smoothing_iterations / 5 * smoothing_iter_factor * (smoothing_operations-i)) + min_smoothing_iterations # Weaker smoothing after first iteration. As hard smoothing creates kinks between smoothed nodes and unsmoothed nodes.
+        cons_print(f"Smoothing iterations: {smooth_iter} on object {obj.name} with iteration factor: {smoothing_iter_factor}")
+        bpy.ops.mesh.vertices_smooth(factor=0.5, repeat=smooth_iter)
     bpy.ops.object.mode_set(mode='OBJECT')
 
 class MESH_OT_Ventricle_Sort(bpy.types.Operator): 
