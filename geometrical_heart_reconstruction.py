@@ -1,7 +1,7 @@
 bl_info = {
     "name" : "Geometrical heart reconstrucion", 
     "author" : "Daniel Verhuelsdonk",
-    "version" : (1, 283),
+    "version" : (1, 29),
     "blender" : (3, 1, 0),
     "location" : "Operator Search",
     "description": "Panel and operators to geometrically reconstruct the upper heart shape",
@@ -653,7 +653,7 @@ def select_vertices_outside_of_edge_loop(obj):
     bpy.ops.object.mode_set(mode='EDIT') 
     bm = bmesh.from_edit_mesh(me)
     # Initialize return type
-    must_remove = False
+    must_remove = False # No vertices needs to be removed.
     # Select vertices in edge loop with only two connecting vertices.
     for v in bm.verts:
         if len(get_neighbour_vertices(v)) <= 2 and v.select: #v.index in vertices_orifice: 
@@ -1467,6 +1467,21 @@ def check_node_connectivity(context):
     """Check node-connectivity between all selected objects"""
     vertices, edges, faces = ([] for i in range(3))
     for i, obj in enumerate(context.selected_objects):
+        deselect_object_vertices(obj)
+        # Check for vertices with only two neighbour vertices.
+        me = obj.data
+        bpy.ops.object.mode_set(mode='EDIT') 
+        bm = bmesh.from_edit_mesh(me)
+        # Select vertices in edge loop with only two connecting vertices.
+        for v in bm.verts:
+            if len(get_neighbour_vertices(v)) <= 2: 
+                cons_print(f"Found a vertex with only 2 neighbour vertices in object {obj.name} with vertex index {v.index} at position {obj.matrix_world @ v.co}")
+                v.select = True
+                return False
+        # Return to object mode and update the mesh to the obeject.
+        bm.select_flush_mode()   
+        me.update()
+        bpy.ops.object.mode_set(mode='OBJECT') 
     # Initialize the list of vertices, edges and faces each with their respective connecting vertices.
         if i == 0:
             for v in obj.data.vertices: vertices.append(v.index)
@@ -1491,14 +1506,12 @@ def check_node_connectivity(context):
             for counter, f in enumerate(obj.data.polygons):
                 if not (faces[counter][0] == f.index and faces[counter][1]== f.vertices[0] and faces[counter][2] ==  f.vertices[1] and faces[counter][3] ==  f.vertices[2]):
                     cons_print(f"Face mismatch in object: {obj.name} at face {f.index} with face-center at {f.center}.") 
-                    deselect_object_vertices(obj)
                     f.select = True # Select problematic face.
                     return False
             # Edge-connectivity check.
             for counter, e in enumerate(obj.data.edges):
                 if not (edges[counter][0] == e.index and edges[counter][1]== e.vertices[0] and edges[counter][2] ==  e.vertices[1]):
                     cons_print(f"Edge mismatch in object: {obj.name} at edge {e.index}.")
-                    deselect_object_vertices(obj)
                     e.select = True # Select problematic edge.
                     return False  
     cons_print(f"Node-connectivity matched for all {len(context.selected_objects)} selected elements.")
@@ -1549,7 +1562,7 @@ class PANEL_Position_Ventricle(bpy.types.Panel):
     bl_idname = "PT_Ventricle"
     bl_space_type = 'VIEW_3D'
     bl_region_type = 'UI'
-    bl_category = 'Herz'
+    bl_category = 'GVR-Pipeline'
     bl_option = {'DEFALUT_CLOSED'}
     def draw(self, context):
         layout = self.layout 
@@ -1577,7 +1590,7 @@ class PANEL_Valves(bpy.types.Panel):
     bl_idname = "PT_Valves"
     bl_space_type = 'VIEW_3D'
     bl_region_type = 'UI'
-    bl_category = 'Herz'
+    bl_category = 'GVR-Pipeline'
     bl_option = {'DEFALUT_CLOSED'}
     def draw(self, context):
         layout = self.layout
@@ -1610,7 +1623,7 @@ class PANEL_Poisson(bpy.types.Panel):
     bl_idname = "PT_Poisson"
     bl_space_type = 'VIEW_3D'
     bl_region_type = 'UI'
-    bl_category = 'Herz'
+    bl_category = 'GVR-Pipeline'
     bl_option = {'DEFALUT_CLOSED'}
     def draw(self, context):
         layout = self.layout      
@@ -1626,7 +1639,7 @@ class PANEL_Setup_Variables(bpy.types.Panel):
     bl_idname = "PT_test"
     bl_space_type = 'VIEW_3D'
     bl_region_type = 'UI'
-    bl_category = 'Herz'
+    bl_category = 'GVR-Pipeline'
     bl_option = {'DEFALUT_CLOSED'}
     def draw(self, context):
         layout = self.layout   
@@ -1654,7 +1667,7 @@ class PANEL_Pipeline(bpy.types.Panel):
     bl_idname = "PT_Pipeline"
     bl_space_type = 'VIEW_3D'
     bl_region_type = 'UI'
-    bl_category = 'Herz'
+    bl_category = 'GVR-Pipeline'
     bl_option = {'DEFALUT_CLOSED'}
     def draw(self, context):
         layout = self.layout
@@ -1691,7 +1704,7 @@ class PANEL_Dev_tools(bpy.types.Panel):
     bl_idname = "PT_Dev_tools"
     bl_space_type = 'VIEW_3D'
     bl_region_type = 'UI'
-    bl_category = 'Herz'
+    bl_category = 'GVR-Pipeline'
     bl_option = {'DEFALUT_CLOSED'}
     def draw(self, context):
         layout = self.layout
