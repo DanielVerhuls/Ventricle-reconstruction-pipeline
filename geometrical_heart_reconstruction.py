@@ -677,9 +677,9 @@ def build_valve_surface(context, obj, valve_mode, ratio, valve_index):
         vg_boundary = "MV_Boundary"
         vg_orifice = "Mitral_orifice"
         if context.scene.approach == 3 or context.scene.approach == 4: obj_name = f"A{context.scene.approach}_MV_Surface" # A3 or A4.
-        else: # Interpolated mitral valve (A5).
-            if valve_index in range(5): obj_name = f"A{context.scene.approach}_MV_{valve_index}"
-            else: return False
+        elif valve_index in range(5): # Interpolated mitral valve (A5).
+            obj_name = f"A{context.scene.approach}_MV_{valve_index}"
+        else: return False
     else: return False
     add_and_join_object(context, obj, obj_name, valve_mode, ratio) # Add valve object for the given valve type.
     # Select valve boundary and orifice vertices.
@@ -711,6 +711,7 @@ def mesh_create_basal(context):
     reference_copy = copy_object(bpy.types.Scene.reference_object_name, 'basal_region')
     # Deselect objects.
     for obj in selected_objects: obj.select_set(False)
+          
     # Operations to create basal region of the ventricle.
     basal_regions = create_basal_region_for_object(context, reference_copy)
     if not basal_regions: 
@@ -719,7 +720,7 @@ def mesh_create_basal(context):
     # Cleanup.
     # Reselect objects to state previous to this operation and deselect (and hide for performance) created objects.
     for obj in selected_objects: obj.select_set(True)
-    for basal in basal_regions: 
+    for basal in basal_regions:  
         basal.select_set(False)
         basal.hide_set(True)
     # Remove old basal region objects.
@@ -767,7 +768,9 @@ def create_basal_region_for_object(context, reference_copy):
     if not compute_height_plane(context): return False # Compute height plane for the removal of the apical region.
     # Poisson with remeshing and triangulation.
     poisson_basal = create_poisson_from_object_pointcloud(context, reference_copy)
-    voxel_size = min(context.scene.aortic_radius, context.scene.mitral_radius_long, context.scene.mitral_radius_small) / 4 # Compute voxel_size for remesh and merge dependent of the smallest valve size.
+    # Compute voxel_size for remesh and merge dependent of the smallest valve size. Reduced for approach 5.
+    if context.scene.approach == 5: voxel_size = min(context.scene.aortic_radius, context.scene.mitral_radius_long, context.scene.mitral_radius_small) / 6 
+    else: voxel_size = min(context.scene.aortic_radius, context.scene.mitral_radius_long, context.scene.mitral_radius_small) / 4 
     apply_voxel_remesh(voxel_size) # Apply Remesh for better mesh quality (remove small mesh elements with high cell skewness).
     # Triangulate remesh.
     bpy.ops.object.modifier_add(type='TRIANGULATE')
@@ -779,7 +782,9 @@ def create_basal_region_for_object(context, reference_copy):
     create_valve_orifice(context, "Mitral")
     create_valve_orifice(context, "Aortic")
     basal_regions = insert_valves_into_basal(context, poisson_basal) # Create exact inputs for the valve boundaries and connect it with the remaining basal region.
-    smooth_basal_region(context, voxel_size) # Smooth basal region nodes excluding valves and lower edge loop.
+    cons_print(f"Amount of basal regions: {len(basal_regions)}")
+    for basal in basal_regions: basal.select_set(False)
+    for basal in basal_regions: smooth_basal_region(context, basal, voxel_size) # Smooth basal region nodes excluding valves and lower edge loop.
     return basal_regions
 
 def compute_height_plane(context): 
@@ -870,7 +875,7 @@ def insert_valves_into_basal(context, poisson_basal):
             # Copy basal region and prepare it for mitral valve insertion.
             bpy.ops.object.mode_set(mode='OBJECT')
             curr_basal = copy_object(poisson_basal.name, f"basal_{i}")
-            curr_basal.select_set(True)
+            curr_basal.select_set(True) 
             bpy.context.view_layer.objects.active = curr_basal
             deselect_object_vertices(curr_basal)
             bpy.ops.object.mode_set(mode='EDIT')
@@ -889,10 +894,10 @@ def connect_valve_orifice_reference(context, valve_mode, valve_index):
     bpy.ops.mesh.looptools_bridge(cubic_strength=1, interpolation='linear', loft=False, loft_loop=False, min_width=100, mode='shortest', remove_faces=False, reverse=False, segments=1, twist=0)
     bpy.ops.mesh.quads_convert_to_tris(quad_method='BEAUTY', ngon_method='BEAUTY')
     selected_edges_after_indices, selected_edges_after_verts = get_selected_edges(obj)
-
+    # Change to object mode 
     bpy.ops.object.mode_set(mode='OBJECT')
     bpy.context.tool_settings.mesh_select_mode = (True, False, False)
-    
+    # Save newly created edges
     new_edges = []
     new_edges_vert_indices = []
     for counter, e in enumerate(selected_edges_after_indices):
@@ -911,12 +916,18 @@ def connect_valve_orifice_from_reference(context, valve_mode, valve_index, edges
     build_valve_surface(context, obj, valve_mode = valve_mode, ratio = 1, valve_index = valve_index)
     bridge_edges_ventricle(obj, edges_reference)
     
-def smooth_basal_region(context, voxel_size):
+def smooth_basal_region(context, basal, voxel_size):
     """Smooth basal region"""
-    select_inner_basal_vertices(context)
-    bpy.ops.object.mode_set(mode='EDIT') 
+    # Set current basal region active and go into edit mode.
+    basal.select_set(True)
+    bpy.context.view_layer.objects.active = basal
+    select_only_inner_basal_vertices()
+    bpy.ops.object.mode_set(mode='EDIT')
+
     # Merge close nodes and smooth them.
-    if context.scene.approach == 3 or context.scene.approach == 4: bpy.ops.mesh.remove_doubles(threshold= voxel_size *0.9, use_sharp_edge_from_normals=False, use_unselected=False)
+    if context.scene.approach == 3 or context.scene.approach == 4: bpy.ops.mesh.remove_doubles(threshold= voxel_size * 0.9, use_sharp_edge_from_normals=False, use_unselected=False) # Don't remove for approach 5
+    #if basal.name == "basal_4":
+    #    sad
     bpy.ops.mesh.vertices_smooth(factor=0.75, repeat=10)
     # Select valve orifice edge loops for a better smoothing transition between valves and basal region.
     bpy.ops.object.vertex_group_set_active(group=str("Aortic_orifice"))
@@ -924,7 +935,7 @@ def smooth_basal_region(context, voxel_size):
     bpy.ops.object.vertex_group_set_active(group=str("Mitral_orifice"))
     bpy.ops.object.vertex_group_select()
     # Smooth again with orifice selected.
-    if context.scene.approach == 3 or context.scene.approach == 4: bpy.ops.mesh.remove_doubles(threshold=voxel_size * 0.9, use_sharp_edge_from_normals=False, use_unselected=False)
+    if context.scene.approach == 3 or context.scene.approach == 4: bpy.ops.mesh.remove_doubles(threshold=voxel_size * 0.9, use_sharp_edge_from_normals=False, use_unselected=False) # Don't remove for approach 5
     bpy.ops.mesh.vertices_smooth(factor=0.75, repeat=20)     
     # Relax lower orifice edge loop.
     bpy.ops.mesh.select_all(action="DESELECT")
@@ -932,15 +943,16 @@ def smooth_basal_region(context, voxel_size):
     bpy.ops.object.vertex_group_select()
     bpy.ops.mesh.looptools_relax(input='selected', interpolation='linear', iterations='5', regular=True)
     # Smooth inner vertices in an iterative process, removing small cells in the process.
-    select_inner_basal_vertices(context)
+    select_only_inner_basal_vertices()
     bpy.ops.object.mode_set(mode='EDIT')
     smooth_basal_iterations = 5
     for i in range(smooth_basal_iterations):
-        bpy.ops.mesh.remove_doubles(threshold= voxel_size, use_sharp_edge_from_normals=False, use_unselected=False)
+        if context.scene.approach == 3 or context.scene.approach == 4: bpy.ops.mesh.remove_doubles(threshold= voxel_size, use_sharp_edge_from_normals=False, use_unselected=False) # Don't remove for approach 5
         bpy.ops.mesh.vertices_smooth(factor=0.5, repeat=10)
     bpy.ops.object.mode_set(mode='OBJECT') 
+    basal.select_set(False)
 
-def select_inner_basal_vertices(context):
+def select_only_inner_basal_vertices():
     """Select all vertices in basal region except valve regions including the orifice edge loop and lower orifice loop"""
     bpy.ops.object.mode_set(mode='EDIT') 
     bpy.ops.mesh.select_all(action="SELECT")
@@ -1017,6 +1029,7 @@ def combine_apical_and_basal_region(context, basal_regions, reference, selected_
     # Apply connecting-operation for remaining ventricle geometries.
     for counter, obj in enumerate(selected_objects):
         basal = basal_regions[get_valve_state_index(context, counter, frame_EDV)] # Choose basal region.
+        if counter == 8: return False
         # Apply connecting operation from reference.
         prepare_geometry_for_bridging(obj, basal) 
         bridge_edges_ventricle(obj, edge_indices_bridge)
@@ -1332,7 +1345,6 @@ def create_porous_valve_zones(context, valve_mode, valve_strings):
         valve_substring = "mv"
     else: return False
     obj_types = ["_perm", "_res", "_imperm"] # Collection of valve types for name setup.
-
     for obj_str in valve_strings:
         for obj_type in obj_types:
             if obj_type in obj_str: new_name = f"{valve_substring}{obj_type}" # Combine substrings to string of new object.
