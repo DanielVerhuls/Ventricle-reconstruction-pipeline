@@ -10,6 +10,7 @@ bl_info = {
     "category" : "Add Mesh",
 }
 # Imports
+from msilib.schema import Icon
 import bpy
 import bmesh
 import math
@@ -209,7 +210,7 @@ def remove_multiple_basal_region(context):
         cons_print("No elements selected.")
         return False
     selected_objects = context.selected_objects
-    reference_copy = copy_object(find_reference_ventricle_name(selected_objects), 'reference') # Find object with max volume and create a copy of it as a reference object.
+    reference_copy = copy_object(find_reference_ventricle_mean(selected_objects), 'reference') # Find object with max volume and create a copy of it as a reference object.
     cons_print(f"Reference object: {bpy.types.Scene.reference_object_name}")
     for obj in selected_objects: obj.select_set(False) # Deselect objects.
     # Basal region removal. First for reference, then remaining objects.
@@ -729,7 +730,7 @@ def mesh_create_basal(context):
     bpy.data.objects.remove(bpy.data.objects["basal_region_poisson"], do_unlink=True)
     return basal_regions
 
-def find_reference_ventricle_name(objects): 
+def find_reference_ventricle_max(objects): 
     """Find reference object with max volume and return its name"""
     max = 0
     for obj in objects:  
@@ -738,6 +739,23 @@ def find_reference_ventricle_name(objects):
         if volume > max: # Find ventricle with maximum volume.
             max = volume
             bpy.types.Scene.reference_object_name = obj.name
+    return bpy.types.Scene.reference_object_name
+
+def find_reference_ventricle_mean(objects): 
+    """Find reference object with max volume and return its name"""
+    volumes = []
+    for obj in objects: 
+        bm = transfer_data_to_mesh(obj)
+        volumes.append(bm.calc_volume(signed=True))
+    mean_volume = sum(volumes) / len(volumes)
+    cons_print(f"Mean volume: {mean_volume}")
+    diff_to_mean = 2 * max(volumes)
+    for counter, obj in enumerate(objects):  
+        if abs(volumes[counter] - mean_volume) < diff_to_mean: 
+            cons_print(f"Changed reference object to {obj.name} with difference to mean: {diff_to_mean}")
+            diff_to_mean = abs(volumes[counter] - mean_volume)
+            bpy.types.Scene.reference_object_name = obj.name
+
     return bpy.types.Scene.reference_object_name
 
 def find_max_value_after_basal_removal(context, objects):
@@ -1188,11 +1206,11 @@ def smooth_connection_and_basal_region(context, obj, smoothing_iter_factor):
     bpy.ops.object.vertex_group_select()  
     bpy.ops.object.vertex_group_set_active(group=str("upper_apical_edge_loop"))
     bpy.ops.object.vertex_group_select()  
-    # Select edge loops below the connection. Selecting all apical nodes would greatly shrink the ventricle volume in that region.
-    smoothing_operations = 3
-    max_smoothing_iterations = 25
-    min_smoothing_iterations = 2
-    for i in range(smoothing_operations):  # Iteratively smooth the selected nodes. This especially smooths the transition between connection and apical nodes.
+    # Select edge loops below the connection. Selecting all apical nodes would greatly shrink the ventricle volume in that region.   
+    cons_print(f"Max iterations: {context.scene.max_con_sm_iter}")
+    cons_print(f"Min iterations: {context.scene.min_con_sm_iter}")
+    cons_print(f"Repetition: {context.scene.sm_reps }")
+    for i in range(context.scene.sm_reps):  # Iteratively smooth the selected nodes. This especially smooths the transition between connection and apical nodes.
         bpy.ops.mesh.select_more() # Select edge loops until reaching an edgeloop, that was not subdivided during the removal of the basal region.
         # Exclude valve nodes in the selection process.
         bpy.ops.object.vertex_group_set_active(group=str("AV"))
@@ -1200,9 +1218,9 @@ def smooth_connection_and_basal_region(context, obj, smoothing_iter_factor):
         bpy.ops.object.vertex_group_set_active(group=str("MV"))
         bpy.ops.object.vertex_group_deselect()
         if i == 0:
-            smooth_iter = round(max_smoothing_iterations * smoothing_iter_factor) + min_smoothing_iterations # Strong smoothing initially.
+            smooth_iter = round(context.scene.max_con_sm_iter * smoothing_iter_factor) + context.scene.min_con_sm_iter # Strong smoothing initially.
         else:
-            smooth_iter = round(max_smoothing_iterations / 5 * smoothing_iter_factor * (smoothing_operations-i)) + min_smoothing_iterations # Weaker smoothing after first iteration. As hard smoothing creates kinks between smoothed nodes and unsmoothed nodes.
+            smooth_iter = round(context.scene.max_con_sm_iter / 5 * smoothing_iter_factor * (context.scene.sm_reps-i)) + context.scene.min_con_sm_iter # Weaker smoothing after first iteration. As hard smoothing creates kinks between smoothed nodes and unsmoothed nodes.
         cons_print(f"Smoothing iterations: {smooth_iter} on object {obj.name} with iteration factor: {smoothing_iter_factor}")
         bpy.ops.mesh.vertices_smooth(factor=0.5, repeat=smooth_iter)
     bpy.ops.object.mode_set(mode='OBJECT')
@@ -1646,7 +1664,7 @@ class PANEL_Setup_Variables(bpy.types.Panel):
         row = layout.row()
         row.prop(context.scene, 'remove_basal_threshold', text="Threshold for basal region removal") 
         row = layout.row()
-        row.label(text= "Interpolation variables.") 
+        row.label(text= "Interpolation variables") 
         row = layout.row()
         row.prop(context.scene, 'time_rr', text="Time RR-duration") 
         row = layout.row()
@@ -1654,13 +1672,23 @@ class PANEL_Setup_Variables(bpy.types.Panel):
         row = layout.row()
         row.prop(context.scene, 'frames_ventricle', text="Frames after interpolation") 
         row = layout.row()
-        row.label(text= "Advanced setup variables.") 
+        row.label(text= "Advanced setup variables", icon = 'HOME') 
         row = layout.row()
         row.prop(context.scene, 'poisson_depth', text="Depth of poisson reconstruction algorithm") 
         row = layout.row()
-        layout.prop(context.scene, "connection_twist", text="Twist during connecting algorithm for the function looptools_bridge.")
+        row.label(text= "Connection initialization variables") 
         row = layout.row()
-        layout.prop(context.scene, "inset_faces_refinement_steps", text="Refinement steps for insetting faces during connection algorithm.")
+        layout.prop(context.scene, "connection_twist", text="Twist during connecting algorithm for the function looptools_bridge")
+        row = layout.row()
+        layout.prop(context.scene, "inset_faces_refinement_steps", text="Refinement steps for insetting faces during connection algorithm")
+        row = layout.row()
+        row.label(text= "Connection smoothing variales") 
+        row = layout.row()
+        layout.prop(context.scene, "max_con_sm_iter", text="Maximum smoothing iterations")
+        row = layout.row()
+        layout.prop(context.scene, "min_con_sm_iter", text="Minimum smoothing iterations")
+        row = layout.row()
+        layout.prop(context.scene, "sm_reps", text="Smoothing repetitions with a wider node selection each")
       
 class PANEL_Pipeline(bpy.types.Panel):
     bl_label = "Geometric ventricle reconstruction pipeline"
@@ -1672,22 +1700,24 @@ class PANEL_Pipeline(bpy.types.Panel):
     def draw(self, context):
         layout = self.layout
         row = layout.row()
-        layout.operator('heart.sort_ventricles', text= "Sort volumes", icon = 'HOME')
+        row.label(text= "Setup pipeline", icon = 'SETTINGS')
         row = layout.row()
-        row.label(text= "Setup ventricle position and rotation") #!!! als button der diesen reiter oeffnet
+        layout.operator('heart.sort_ventricles', text= "Sort volumes", icon = 'EVENT_F1')
         row = layout.row()
-        row.label(text= "Setup valves") #!!! als button der diesen reiter oeffnet
+        row.label(text= "Setup ventricle position and rotation", icon = 'EVENT_F2') #!!! als button der diesen reiter oeffnet
         row = layout.row()
-        row.label(text= "Setup algorithm variables") #!!! als button der diesen reiter oeffnet
+        row.label(text= "Setup valves", icon = 'EVENT_F3') #!!! als button der diesen reiter oeffnet
         row = layout.row()
-        layout.operator('heart.ventricle_interpolation', text= "Interpolate ventricle", icon = 'IPO_EASE_IN')
+        row.label(text= "Setup algorithm variables", icon = 'EVENT_F4') #!!! als button der diesen reiter oeffnet
         row = layout.row()
         row.label(text= f"Current approach: A{context.scene.approach}")
         row = layout.row()
-        layout.operator("wm.approach_selection")
+        layout.operator("wm.approach_selection", icon = 'EVENT_F5')
         row = layout.row()
-        row = layout.row()
-        row = layout.row()
+        if context.scene.approach == 5:
+            layout.operator('heart.ventricle_interpolation', text= "Interpolate ventricle", icon = 'EVENT_F6')
+            row = layout.row()
+        row.label(text= "Run pipeline", icon = 'PLAY')
         row = layout.row()
         row.operator('heart.remove_basal', text= "Remove basal region", icon = 'LIBRARY_DATA_OVERRIDE')  
         row = layout.row()
@@ -1743,10 +1773,10 @@ def register():
     bpy.types.Scene.translation_aortic = bpy.props.FloatVectorProperty(name="Aortic valve translation", default = (0,0,1))
     bpy.types.Scene.angle_aortic = bpy.props.FloatVectorProperty(name="Aortic valve rotation", default = (0,0,0))
     # Support structure.
-    bpy.types.Scene.ref_minima = bpy.props.FloatVectorProperty(name="Minima of reference object.", default = (0,0,0))
-    bpy.types.Scene.ref_maxima = bpy.props.FloatVectorProperty(name="Maxima of reference object.", default = (0,0,1))
+    bpy.types.Scene.ref_minima = bpy.props.FloatVectorProperty(name="Minima of reference object", default = (0,0,0))
+    bpy.types.Scene.ref_maxima = bpy.props.FloatVectorProperty(name="Maxima of reference object", default = (0,0,1))
     # Cutting plane variables.
-    bpy.types.Scene.remove_basal_threshold = bpy.props.FloatProperty(name="Threshold for the removal of the basal region.", default=28.5,  min = 0)
+    bpy.types.Scene.remove_basal_threshold = bpy.props.FloatProperty(name="Threshold for the removal of the basal region", default=28.5,  min = 0)
     bpy.types.Scene.height_plane = bpy.props.FloatProperty(name="Cut-off value for the creation of the reference basal region", default=40,  min = 0.01)
     bpy.types.Scene.min_valves = bpy.props.FloatProperty(name="Minimal z-value of valves", default=45)
     bpy.types.Scene.max_apical = bpy.props.FloatProperty(name="Maximal z-value of apical region after cutting", default=20)
@@ -1756,13 +1786,15 @@ def register():
     bpy.types.Scene.poisson_depth = bpy.props.IntProperty(name="Depth of possion algorithm", default=10,  min = 1)
     # Interpolation variables.
     bpy.types.Scene.time_rr = bpy.props.FloatProperty(name="Time RR-duration", default=0.6,  min = 0.01)
-    bpy.types.Scene.time_diastole = bpy.props.FloatProperty(name="Time diastole", default=0.35,  min = 0.01) # !!!Compute automatically using the volumes and rr-duration. 
+    bpy.types.Scene.time_diastole = bpy.props.FloatProperty(name="Time diastole", default=0.35,  min = 0.01) 
     bpy.types.Scene.frames_ventricle = bpy.props.IntProperty(name="Amount of frames ventricle after interpolation", default=10,  min = 10)
     # Connection algorithm variables.
     bpy.types.Scene.reference_object_name = bpy.props.StringProperty(name="Name of the reference object", default = "ventricle_0")
-    bpy.types.Scene.inset_faces_refinement_steps = bpy.props.IntProperty(name="Refinement steps when insetting faces in the connection algorithm.", default=1, min=1)
-    bpy.types.Scene.connection_twist = bpy.props.IntProperty(name="Twist for bridging algorithm in connection.", default=0)
-
+    bpy.types.Scene.inset_faces_refinement_steps = bpy.props.IntProperty(name="Refinement steps when insetting faces in the connection algorithm", default=1, min=1)
+    bpy.types.Scene.connection_twist = bpy.props.IntProperty(name="Twist for bridging algorithm in connection", default=0)
+    bpy.types.Scene.max_con_sm_iter = bpy.props.IntProperty(name="Maximum smoothing iterations for the smoothing of the connection between basal and apical region", default=25, min = 5)
+    bpy.types.Scene.min_con_sm_iter = bpy.props.IntProperty(name="Minimum smoothing iterations for the smoothing of the connection between basal and apical region", default=2, min = 0)
+    bpy.types.Scene.sm_reps = bpy.props.IntProperty(name="Repitions of reselection and smoothing application when smoothing basal and apical region", default=3, min = 0)
 
     # Register UI-classes for Panels and functions.
     for c in classes: bpy.utils.register_class(c)
