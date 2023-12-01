@@ -17,6 +17,8 @@ import math
 import mathutils 
 import numpy as np
 import open3d as o3d
+import random
+
 scene = bpy.types.Scene
 
 dev_env_tools = True
@@ -1569,11 +1571,76 @@ class MESH_DEV_test_function(bpy.types.Operator):
     def execute(self, context):
         test_function(context)
         return{'FINISHED'}
+
+def compute_face_color_distance_to_raw(face, obj):
+    """"""
     
+
+    """red = abs(face.calc_center_bounds()[0])  # creates a value from 0.0 to 1.0
+    green = 0
+    blue = abs(face.calc_center_bounds()[1])
+    alpha = 1.0
+    color = (red, green, blue, alpha)"""
+
+
+    dist = compute_distance(face, obj)
+    color = [ math.sin( dist ) ** 2 , math.sin( dist * 2  ) **2  , math.sin( dist * 0.77  )  , 1 ]
+    return color
+
+def compute_distance(face, obj):
+    """"""
+    objPos = obj.location
+    facePos = face.calc_center_bounds() #(face.calc_center_bounds()[0], face.calc_center_bounds()[1], face.calc_center_bounds()[2])
+    dist = ( objPos - facePos ).length
+    #dist /= 4
+    return dist
+
 def test_function(context):
     """"""
     cons_print(f"Running test function")
-    bpy.ops.view3d.view_axis(type='TOP', align_active=False, relative=False)
+    ico_object = bpy.context.active_object
+    # turn ON Edit Mode
+    bpy.ops.object.editmode_toggle()
+
+    # deselect all faces
+    bpy.ops.mesh.select_all()
+
+    # get geometry data from mesh object
+    ico_bmesh = bmesh.from_edit_mesh(ico_object.data)
+    # Compute colors and normalize them
+    colors = []
+    cube = bpy.data.objects["Cube"]
+
+    for face in ico_bmesh.faces:
+        colors.append(compute_face_color_distance_to_raw(face, cube))
+        cons_print(f"Face {face.index} at position ({face.calc_center_bounds()[0]}, {face.calc_center_bounds()[1]}, {face.calc_center_bounds()[2]})")
+    cons_print(f"Colors: {colors}")
+    cons_print(f"Anfang colors: {colors[0]}")
+
+    # iterate through each face of the mesh
+    for index, face in enumerate(ico_bmesh.faces):
+        # create a new material
+        mat = bpy.data.materials.new(name=f"face_{face.index}")
+        mat.diffuse_color = colors[index]
+
+        # add the material to the object
+        ico_object.data.materials.append(mat)
+
+        # set active material
+        ico_object.active_material_index = face.index
+
+        # select the face and assign the active material
+        face.select = True
+        bpy.ops.object.material_slot_assign()
+        face.select = False
+
+    # turn OFF Edit Mode
+    bpy.ops.object.editmode_toggle()
+
+
+
+    
+    
 
 class PANEL_Position_Ventricle(bpy.types.Panel):
     bl_label = "Ventricle position (mm)"
