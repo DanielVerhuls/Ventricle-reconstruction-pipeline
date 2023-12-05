@@ -1576,7 +1576,11 @@ def compute_colors(distances):
     """"""
     colors = []
     for dist in distances:
-        colors.append([ int(255 * (1 - dist)) , int(255 * (1 - abs(2 * dist - 1)))  , int(255 * dist)  , 1 ])
+        #colors.append([ int(255 * (1 - dist)) , int(255 * (1 - abs(2 * dist - 1)))  , int(255 * dist)  , 1 ])
+        if dist <= 0.5:
+            colors.append([ 2 * dist , 2 * dist  , 1   , 1 ])
+        else: 
+            colors.append([ 1 , 1 - (2 * dist - 0.5) , 1 - (2 * dist - 0.5) , 1 ])
     return colors
     
 def compute_norm_face_distances(faces, obj):
@@ -1586,7 +1590,7 @@ def compute_norm_face_distances(faces, obj):
         distances.append(compute_min_face_distance(face, obj))
     cons_print(f"Maximum distance: {max(distances)}")
     # Normalize distances.
-    for dist in distances: dist /= max(distances)
+    for index, dist in enumerate(distances): distances[index] /= max(distances)
     return distances
 
 def compute_min_face_distance(face, obj):
@@ -1597,7 +1601,9 @@ def compute_min_face_distance(face, obj):
     return dist"""
     objPos = obj.location
     facePos = face.calc_center_bounds() 
-    dist = ( objPos - facePos ).length
+    #dist = abs(( objPos - facePos )).length
+    dist = math.sqrt((objPos.x - facePos.x) * (objPos.x - facePos.x)+ (objPos.y - facePos.y) * (objPos.y - facePos.y) + (objPos.z - facePos.z) * (objPos.z - facePos.z))
+    #cons_print(f"Distance: {dist} with obj-Pos: [{objPos.x}, {objPos.y},{objPos.z}] and face-pos [{facePos.x}, {facePos.y},{facePos.z}]")
     #dist /= 4
     return dist
 
@@ -1629,15 +1635,13 @@ def test_function(context):
     distances = compute_norm_face_distances(ico_bmesh.faces, cube)
     colors = compute_colors(distances)
 
-        
-    cons_print(f"Colors: {colors}")
-    cons_print(f"Anfang colors: {colors[0]}")
-
+    
     # iterate through each face of the mesh
     for index, face in enumerate(ico_bmesh.faces):
         # create a new material
         mat = bpy.data.materials.new(name=f"face_{face.index}")
         mat.diffuse_color = colors[index]
+        cons_print(f"Face with index: {index} at position {face.calc_center_bounds()} has normalized distance: {distances[index]} and color-code: {colors[index]}")
 
         # add the material to the object
         ico_object.data.materials.append(mat)
@@ -1653,10 +1657,6 @@ def test_function(context):
     # turn OFF Edit Mode
     bpy.ops.object.editmode_toggle()
 
-
-
-    
-    
 
 class PANEL_Position_Ventricle(bpy.types.Panel):
     bl_label = "Ventricle position (mm)"
