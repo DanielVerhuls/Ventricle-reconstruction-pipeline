@@ -1576,47 +1576,41 @@ def compute_colors(distances):
     """"""
     colors = []
     for dist in distances:
-        #colors.append([ int(255 * (1 - dist)) , int(255 * (1 - abs(2 * dist - 1)))  , int(255 * dist)  , 1 ])
         if dist <= 0.5:
             colors.append([ 2 * dist , 2 * dist  , 1   , 1 ])
         else: 
-            colors.append([ 1 , 1 - (2 * dist - 0.5) , 1 - (2 * dist - 0.5) , 1 ])
+            colors.append([ 1 , 1 - (2 * dist - 1) , 1 - (2 * dist - 1) , 1 ])
     return colors
     
 def compute_norm_face_distances(faces, obj):
     """"""
     distances = []
-    for face in faces:
-        distances.append(compute_min_face_distance(face, obj))
-    cons_print(f"Maximum distance: {max(distances)}")
+    # Compute all distances minimum face distances between one face of a chosen abject to any face of another object
+    for face in faces: distances.append(compute_min_face_distance(face, obj))
+    max_dist = max(distances)
+    cons_print(f"Maximum distance: {max_dist}")
     # Normalize distances.
-    for index, dist in enumerate(distances): distances[index] /= max(distances)
+    for index, dist in enumerate(distances): distances[index] = dist / max_dist
     return distances
 
 def compute_min_face_distance(face, obj):
-    """"""
-    """for other_face in obj.faces:
-        pass
-    dist = 1
-    return dist"""
-    objPos = obj.location
+    """Find minimum distance of a given face to any face of a given body."""
     facePos = face.calc_center_bounds() 
-    #dist = abs(( objPos - facePos )).length
-    dist = math.sqrt((objPos.x - facePos.x) * (objPos.x - facePos.x)+ (objPos.y - facePos.y) * (objPos.y - facePos.y) + (objPos.z - facePos.z) * (objPos.z - facePos.z))
-    #cons_print(f"Distance: {dist} with obj-Pos: [{objPos.x}, {objPos.y},{objPos.z}] and face-pos [{facePos.x}, {facePos.y},{facePos.z}]")
-    #dist /= 4
+    for counter, obj_face in enumerate(obj.data.polygons):
+        objFacePos = obj_face.center
+        curr_dist = math.sqrt((objFacePos.x - facePos.x) * (objFacePos.x - facePos.x)+ (objFacePos.y - facePos.y) * (objFacePos.y - facePos.y) + (objFacePos.z - facePos.z) * (objFacePos.z - facePos.z))
+        cons_print(f"Face index: {face.index} with current distance: {curr_dist} with obj-face-Pos: [{objFacePos.x}, {objFacePos.y},{objFacePos.z}] and face-pos [{facePos.x}, {facePos.y},{facePos.z}]")  
+        if counter == 0 or curr_dist < dist:
+            dist = curr_dist
+            cons_print(f"Changed distance for face with index {face.index} to: {dist}")
     return dist
-
-def test():
-    """"""
-    pass
 
 def test_function(context):
     """"""
     cons_print(f"Running test function")
     ico_object = bpy.context.active_object
-    # Remove old materials
-    """for mat in len(materials):
+    # Remove old materials !!!
+    """for mat in len(bpy.data.materials):
         bpy.context.object.active_material_index = 0
         bpy.ops.object.material_slot_remove()"""
 
