@@ -1572,33 +1572,48 @@ class MESH_DEV_test_function(bpy.types.Operator):
         test_function(context)
         return{'FINISHED'}
 
-def compute_face_color_distance_to_raw(face, obj):
+def compute_colors(distances):
     """"""
+    colors = []
+    for dist in distances:
+        colors.append([ int(255 * (1 - dist)) , int(255 * (1 - abs(2 * dist - 1)))  , int(255 * dist)  , 1 ])
+    return colors
     
-
-    """red = abs(face.calc_center_bounds()[0])  # creates a value from 0.0 to 1.0
-    green = 0
-    blue = abs(face.calc_center_bounds()[1])
-    alpha = 1.0
-    color = (red, green, blue, alpha)"""
-
-
-    dist = compute_distance(face, obj)
-    color = [ math.sin( dist ) ** 2 , math.sin( dist * 2  ) **2  , math.sin( dist * 0.77  )  , 1 ]
-    return color
-
-def compute_distance(face, obj):
+def compute_norm_face_distances(faces, obj):
     """"""
+    distances = []
+    for face in faces:
+        distances.append(compute_min_face_distance(face, obj))
+    cons_print(f"Maximum distance: {max(distances)}")
+    # Normalize distances.
+    for dist in distances: dist /= max(distances)
+    return distances
+
+def compute_min_face_distance(face, obj):
+    """"""
+    """for other_face in obj.faces:
+        pass
+    dist = 1
+    return dist"""
     objPos = obj.location
-    facePos = face.calc_center_bounds() #(face.calc_center_bounds()[0], face.calc_center_bounds()[1], face.calc_center_bounds()[2])
+    facePos = face.calc_center_bounds() 
     dist = ( objPos - facePos ).length
     #dist /= 4
     return dist
+
+def test():
+    """"""
+    pass
 
 def test_function(context):
     """"""
     cons_print(f"Running test function")
     ico_object = bpy.context.active_object
+    # Remove old materials
+    """for mat in len(materials):
+        bpy.context.object.active_material_index = 0
+        bpy.ops.object.material_slot_remove()"""
+
     # turn ON Edit Mode
     bpy.ops.object.editmode_toggle()
 
@@ -1608,12 +1623,13 @@ def test_function(context):
     # get geometry data from mesh object
     ico_bmesh = bmesh.from_edit_mesh(ico_object.data)
     # Compute colors and normalize them
-    colors = []
+    
     cube = bpy.data.objects["Cube"]
 
-    for face in ico_bmesh.faces:
-        colors.append(compute_face_color_distance_to_raw(face, cube))
-        cons_print(f"Face {face.index} at position ({face.calc_center_bounds()[0]}, {face.calc_center_bounds()[1]}, {face.calc_center_bounds()[2]})")
+    distances = compute_norm_face_distances(ico_bmesh.faces, cube)
+    colors = compute_colors(distances)
+
+        
     cons_print(f"Colors: {colors}")
     cons_print(f"Anfang colors: {colors[0]}")
 
