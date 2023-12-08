@@ -17,7 +17,6 @@ import math
 import mathutils 
 import numpy as np
 import open3d as o3d
-import random
 
 scene = bpy.types.Scene
 
@@ -1573,82 +1572,80 @@ class MESH_DEV_test_function(bpy.types.Operator):
         return{'FINISHED'}
 
 def compute_colors(distances):
-    """"""
+    """Compute face colors for the normalized distance value."""
     colors = []
     for dist in distances:
-        if dist <= 0.5:
-            colors.append([ 2 * dist , 2 * dist  , 1   , 1 ])
-        else: 
-            colors.append([ 1 , 1 - (2 * dist - 1) , 1 - (2 * dist - 1) , 1 ])
+        if dist <= 0.5: colors.append([ 2 * dist , 2 * dist  , 1   , 1 ])
+        else: colors.append([ 1 , 1 - (2 * dist - 1) , 1 - (2 * dist - 1) , 1 ])
     return colors
     
-def compute_norm_face_distances(faces, obj):
-    """"""
+def get_face_centers_of_object(obj):
+    """Return all face centers of an object as a numpy vector."""
+    obj_face_centers = []
+    for obj_face in obj.data.polygons:
+        objFacePos = obj_face.center
+        face_vector_np = np.array([objFacePos.x, objFacePos.y, objFacePos.z])
+        obj_face_centers.append(face_vector_np)
+    return obj_face_centers
+
+def compute_norm_face_distances(ico_obj_face_centers, other_obj_face_centers): 
+    """Compute the normalized minimal distance for each face of on object to any dace of another object"""
     distances = []
     # Compute all distances minimum face distances between one face of a chosen abject to any face of another object
-    for face in faces: distances.append(compute_min_face_distance(face, obj))
+    for ico_face_center in ico_obj_face_centers: distances.append(compute_min_face_distance(ico_face_center, other_obj_face_centers))
     max_dist = max(distances)
     cons_print(f"Maximum distance: {max_dist}")
-    # Normalize distances.
-    for index, dist in enumerate(distances): distances[index] = dist / max_dist
+    for index, dist in enumerate(distances): distances[index] = dist / max_dist # Normalize distances.
     return distances
 
-def compute_min_face_distance(face, obj):
+def compute_min_face_distance(ico_face_center, other_obj_face_centers):
     """Find minimum distance of a given face to any face of a given body."""
-    facePos = face.calc_center_bounds() 
-    for counter, obj_face in enumerate(obj.data.polygons):
-        objFacePos = obj_face.center
-        curr_dist = math.sqrt((objFacePos.x - facePos.x) * (objFacePos.x - facePos.x)+ (objFacePos.y - facePos.y) * (objFacePos.y - facePos.y) + (objFacePos.z - facePos.z) * (objFacePos.z - facePos.z))
-        cons_print(f"Face index: {face.index} with current distance: {curr_dist} with obj-face-Pos: [{objFacePos.x}, {objFacePos.y},{objFacePos.z}] and face-pos [{facePos.x}, {facePos.y},{facePos.z}]")  
-        if counter == 0 or curr_dist < dist:
-            dist = curr_dist
-            cons_print(f"Changed distance for face with index {face.index} to: {dist}")
+    dist = 1000000
+    for other_face_center in other_obj_face_centers:
+        curr_dist = compute_distance(ico_face_center, other_face_center)
+        if curr_dist < dist: dist = curr_dist
     return dist
 
+# decorator?
+def compute_distance(ico_face_center, other_face_center):
+    """Efficiently compute distance between two vectors"""
+    return np.linalg.norm(ico_face_center - other_face_center)
+
 def test_function(context):
-    """"""
+    """!!!"""
     cons_print(f"Running test function")
-    ico_object = bpy.context.active_object
-    # Remove old materials !!!
-    """for mat in len(bpy.data.materials):
+    # Deselect object vertices and faces
+    ico_object = context.active_object
+    deselect_object_vertices(context.active_object)
+    # Remove old material slots
+    for mat in bpy.data.materials:
         bpy.context.object.active_material_index = 0
-        bpy.ops.object.material_slot_remove()"""
-
-    # turn ON Edit Mode
+        bpy.ops.object.material_slot_remove()
+    # Switch to edit mode
     bpy.ops.object.editmode_toggle()
-
-    # deselect all faces
-    bpy.ops.mesh.select_all()
-
-    # get geometry data from mesh object
+    # Set geometry data from mesh object
     ico_bmesh = bmesh.from_edit_mesh(ico_object.data)
+    other_obj = bpy.data.objects["Cube"] # !!! cube raus und ventricle rein
+    # Create list of the face centers of both objects.
+    ico_obj_face_centers = get_face_centers_of_object(ico_object)
+    other_obj_face_centers =get_face_centers_of_object(other_obj)
     # Compute colors and normalize them
-    
-    cube = bpy.data.objects["Cube"]
-
-    distances = compute_norm_face_distances(ico_bmesh.faces, cube)
+    distances = compute_norm_face_distances(ico_obj_face_centers, other_obj_face_centers)
     colors = compute_colors(distances)
-
-    
-    # iterate through each face of the mesh
+    # Iterate through each face of the mesh to color the faces
     for index, face in enumerate(ico_bmesh.faces):
         # create a new material
         mat = bpy.data.materials.new(name=f"face_{face.index}")
         mat.diffuse_color = colors[index]
-        cons_print(f"Face with index: {index} at position {face.calc_center_bounds()} has normalized distance: {distances[index]} and color-code: {colors[index]}")
-
-        # add the material to the object
+        #cons_print(f"Face with index: {index} at position {face.calc_center_bounds()} has normalized distance: {distances[index]} and color-code: {colors[index]}")
+        # Add the material to the object and set it active
         ico_object.data.materials.append(mat)
-
-        # set active material
         ico_object.active_material_index = face.index
-
-        # select the face and assign the active material
+        # Select the face and assign the active material
         face.select = True
         bpy.ops.object.material_slot_assign()
         face.select = False
-
-    # turn OFF Edit Mode
+    # Turn off edit mode
     bpy.ops.object.editmode_toggle()
 
 
