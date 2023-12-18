@@ -751,7 +751,6 @@ def find_reference_ventricle_mean(objects):
         bm = transfer_data_to_mesh(obj)
         volumes.append(bm.calc_volume(signed=True))
     mean_volume = sum(volumes) / len(volumes)
-    cons_print(f"Mean volume: {mean_volume}")
     diff_to_mean = 2 * max(volumes)
     for counter, obj in enumerate(objects):  
         if abs(volumes[counter] - mean_volume) < diff_to_mean: 
@@ -1208,9 +1207,6 @@ def smooth_connection_and_basal_region(context, obj, smoothing_iter_factor):
     bpy.ops.object.vertex_group_set_active(group=str("upper_apical_edge_loop"))
     bpy.ops.object.vertex_group_select()  
     # Select edge loops below the connection. Selecting all apical nodes would greatly shrink the ventricle volume in that region.   
-    cons_print(f"Max iterations: {context.scene.max_con_sm_iter}")
-    cons_print(f"Min iterations: {context.scene.min_con_sm_iter}")
-    cons_print(f"Repetition: {context.scene.sm_reps }")
     for i in range(context.scene.sm_reps):  # Iteratively smooth the selected nodes. This especially smooths the transition between connection and apical nodes.
         bpy.ops.mesh.select_more() # Select edge loops until reaching an edgeloop, that was not subdivided during the removal of the basal region.
         # Exclude valve nodes in the selection process.
@@ -1222,7 +1218,6 @@ def smooth_connection_and_basal_region(context, obj, smoothing_iter_factor):
             smooth_iter = round(context.scene.max_con_sm_iter * smoothing_iter_factor) + context.scene.min_con_sm_iter # Strong smoothing initially.
         else:
             smooth_iter = round(context.scene.max_con_sm_iter / 5 * smoothing_iter_factor * (context.scene.sm_reps-i)) + context.scene.min_con_sm_iter # Weaker smoothing after first iteration. As hard smoothing creates kinks between smoothed nodes and unsmoothed nodes.
-        cons_print(f"Smoothing iterations: {smooth_iter} on object {obj.name} with iteration factor: {smoothing_iter_factor}")
         bpy.ops.mesh.vertices_smooth(factor=0.5, repeat=smooth_iter)
     bpy.ops.object.mode_set(mode='OBJECT')
 
@@ -1566,9 +1561,16 @@ class MESH_OT_ApproachSelection(bpy.types.Operator):
 class MESH_DEV_color_min_dist(bpy.types.Operator):
     """Test function for development"""
     bl_idname = 'heart.color_min_dist'
-    bl_label = 'Test function for development'
+    bl_label = 'Color an object with its facewise minimal distance to a reference object'
     def execute(self, context):
-        #color_min_dist(context)
+        if not color_min_dist(context): return{'CANCELLED'}
+        return{'FINISHED'}
+    
+class MESH_DEV_test(bpy.types.Operator):
+    """Test function for development"""
+    bl_idname = 'heart.test'
+    bl_label = 'Empty test function'
+    def execute(self, context):
         test_function(context)
         return{'FINISHED'}
 
@@ -1583,10 +1585,18 @@ def compute_colors(distances):
 def get_face_centers_of_object(obj):
     """Return all face centers of an object as a numpy vector."""
     obj_face_centers = []
-    for obj_face in obj.data.polygons:
-        objFacePos = obj_face.center
-        face_vector_np = np.array([objFacePos.x, objFacePos.y, objFacePos.z])
-        obj_face_centers.append(face_vector_np)
+    long_shift = obj.get("long_shift", 0)
+    cons_print(f"longitudinal shift of object {obj.name} is {long_shift}")
+    if long_shift == 0: # Object without longitudinal shift
+        for obj_face in obj.data.polygons:
+            objFacePos = obj_face.center
+            face_vector_np = np.array([objFacePos.x, objFacePos.y, objFacePos.z])
+            obj_face_centers.append(face_vector_np)
+    else: # Object with longitudinal shift
+        for obj_face in obj.data.polygons:
+            objFacePos = obj_face.center
+            face_vector_np = np.array([objFacePos.x, objFacePos.y, objFacePos.z - long_shift])
+            obj_face_centers.append(face_vector_np)
     return obj_face_centers
 
 def compute_norm_face_distances(ico_obj_face_centers, other_obj_face_centers): 
@@ -1612,24 +1622,39 @@ def compute_distance(ico_face_center, other_face_center):
     """Efficiently compute distance between two vectors"""
     return np.linalg.norm(ico_face_center - other_face_center)
 
+def clean_blocks():
+    """Free memory to prevent memory leaks"""
+    for block in bpy.data.meshes:
+        if block.users == 0: bpy.data.meshes.remove(block)
+    for block in bpy.data.materials:
+        if block.users == 0: bpy.data.materials.remove(block)
+    for block in bpy.data.textures:
+        if block.users == 0: bpy.data.textures.remove(block)
+    for block in bpy.data.images:
+        if block.users == 0: bpy.data.images.remove(block)
+
 def color_min_dist(context):
-    """!!!"""
-    cons_print(f"Running test function")
+    """Color an object with its facewise minimal distance to a reference object"""
+    cons_print(f"Coloring minimal face distance for obj")
     # Deselect object vertices and faces
-    ico_object = context.active_object
+    if context.active_object: ico_object = context.active_object
+    else: 
+        cons_print(f"No active object. Terminating coloring function.")
+        return False
     deselect_object_vertices(context.active_object)
-    # Remove old material slots
+    # Clear material slots
     for mat in bpy.data.materials:
         bpy.context.object.active_material_index = 0
         bpy.ops.object.material_slot_remove()
+    clean_blocks()
     # Switch to edit mode
     bpy.ops.object.editmode_toggle()
     # Set geometry data from mesh object
     ico_bmesh = bmesh.from_edit_mesh(ico_object.data)
-    other_obj = bpy.data.objects["Cube"] # !!! cube raus und ventricle rein
+    other_obj = bpy.data.objects["ref_obj"]
     # Create list of the face centers of both objects.
     ico_obj_face_centers = get_face_centers_of_object(ico_object)
-    other_obj_face_centers =get_face_centers_of_object(other_obj)
+    other_obj_face_centers = get_face_centers_of_object(other_obj)
     # Compute colors and normalize them
     distances = compute_norm_face_distances(ico_obj_face_centers, other_obj_face_centers)
     colors = compute_colors(distances)
@@ -1638,7 +1663,6 @@ def color_min_dist(context):
         # create a new material
         mat = bpy.data.materials.new(name=f"face_{face.index}")
         mat.diffuse_color = colors[index]
-        #cons_print(f"Face with index: {index} at position {face.calc_center_bounds()} has normalized distance: {distances[index]} and color-code: {colors[index]}")
         # Add the material to the object and set it active
         ico_object.data.materials.append(mat)
         ico_object.active_material_index = face.index
@@ -1650,17 +1674,8 @@ def color_min_dist(context):
     bpy.ops.object.editmode_toggle()
 
 def test_function(context):
-    """!!!"""
-    value = 1
-    for obj in context.selected_objects:
-        # Check if the object has a custom property named 'my_variable'
-        if not 'my_variable' in obj:
-            # If not, create the custom property
-            obj['my_variable'] = value
-        else:
-            obj['my_variable'] = value
-        value += 1
-        cons_print(f"Objekt: {obj.name} with my variable {obj['my_variable']}")
+    """Empty test function"""
+    cons_print(f"Running test function")
 
 class PANEL_Position_Ventricle(bpy.types.Panel):
     bl_label = "Ventricle position (mm)"
@@ -1834,30 +1849,9 @@ class PANEL_Dev_tools(bpy.types.Panel):
         row = layout.row()
         layout.operator('heart.dev_check_node_connectivity', text= "Node-connectivity check", icon = 'CHECKMARK') 
         row = layout.row()
-        layout.operator('heart.color_min_dist', text= "Test function", icon = 'CHECKMARK') 
-   
-class MyAddonPanel(bpy.types.Panel):
-    bl_label = "My Addon"
-    bl_idname = "PT_MyAddonPanel"
-    bl_space_type = 'VIEW_3D'
-    bl_region_type = 'UI'
-    bl_category = 'GVR-Pipeline'
-
-    def draw(self, context):
-        layout = self.layout
-
-        # Get the selected objects
-        selected_objects = bpy.context.selected_objects
-
-        for obj in selected_objects:
-            # Check if the object has a custom property named 'my_variable'
-            if not 'my_variable' in obj:
-                # If not, create the custom property
-                obj['my_variable'] = 0.0
-
-            # Display the custom property in the UI
-            layout.prop(obj, '["my_variable"]')
-
+        layout.operator('heart.color_min_dist', text= "Color minimal distance to raw object", icon = 'CHECKMARK') 
+        row = layout.row()
+        layout.operator('heart.test', text= "Test function", icon = 'CHECKMARK')
 
 classes = [
     PANEL_Position_Ventricle, MESH_OT_ApproachSelection,
@@ -1866,7 +1860,7 @@ classes = [
     MESH_OT_create_basal, MESH_OT_connect_apical_and_basal, MESH_OT_Ventricle_Interpolation, MESH_OT_Add_Vessels_Valves, MESH_OT_check_node_connectivity,
 ]
 
-dev_classes = [MyAddonPanel, PANEL_Poisson, MESH_OT_poisson, MESH_OT_create_valve_orifice, MESH_OT_connect_valves, PANEL_Dev_tools, MESH_DEV_volumes, MESH_DEV_indices, MESH_DEV_edge_index, MESH_DEV_color_min_dist]
+dev_classes = [PANEL_Poisson, MESH_OT_poisson, MESH_OT_create_valve_orifice, MESH_OT_connect_valves, PANEL_Dev_tools, MESH_DEV_volumes, MESH_DEV_indices, MESH_DEV_edge_index, MESH_DEV_color_min_dist, MESH_DEV_test]
   
 def register():
     # Position variables.
