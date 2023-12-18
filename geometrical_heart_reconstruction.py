@@ -1622,17 +1622,6 @@ def compute_distance(ico_face_center, other_face_center):
     """Efficiently compute distance between two vectors"""
     return np.linalg.norm(ico_face_center - other_face_center)
 
-def clean_blocks():
-    """Free memory to prevent memory leaks"""
-    for block in bpy.data.meshes:
-        if block.users == 0: bpy.data.meshes.remove(block)
-    for block in bpy.data.materials:
-        if block.users == 0: bpy.data.materials.remove(block)
-    for block in bpy.data.textures:
-        if block.users == 0: bpy.data.textures.remove(block)
-    for block in bpy.data.images:
-        if block.users == 0: bpy.data.images.remove(block)
-
 def color_min_dist(context):
     """Color an object with its facewise minimal distance to a reference object"""
     cons_print(f"Coloring minimal face distance for obj")
@@ -1641,12 +1630,8 @@ def color_min_dist(context):
     else: 
         cons_print(f"No active object. Terminating coloring function.")
         return False
-    deselect_object_vertices(context.active_object)
-    # Clear material slots
-    for mat in bpy.data.materials:
-        bpy.context.object.active_material_index = 0
-        bpy.ops.object.material_slot_remove()
-    clean_blocks()
+    deselect_object_vertices(context.active_object) # Deselect vertices
+    ico_object.data.materials.clear()# Clear material slots
     # Switch to edit mode
     bpy.ops.object.editmode_toggle()
     # Set geometry data from mesh object
