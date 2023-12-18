@@ -220,6 +220,7 @@ def remove_multiple_basal_region(context):
     # Longitudinal shift of each ventricle to match reference object, reducing volume discrepancy between systole and diastole between raw data and reconstructed data.
     find_max_value_after_basal_removal(context, selected_objects)
     shift_ventricles_longitudinally(context, selected_objects)
+    for obj in selected_objects: cons_print(f"Objekt: {obj.name} with my longitudinal shift {obj['long_shift']}")
     context.scene.ref_maxima, context.scene.ref_minima = get_min_max(reference_copy)    
     # Cleanup.
     for obj in selected_objects: obj.select_set(True) # Reselect objects from original selection after main operations are executed.
@@ -329,12 +330,14 @@ def smooth_apical_region(obj, vg_orifice):
 
 def shift_ventricles_longitudinally(context, objects):
     """Shift ventricle to reference ventricle"""
+    objects = []
     for obj in objects:
         max_obj_val, min_obj_val = get_min_max(obj)
         shift_distance =  context.scene.max_apical - max_obj_val[2]
         print(f"Max of ventricle {max_obj_val[2]} creating difference of {shift_distance} towards reference height {context.scene.max_apical}")
         obj.select_set(True)
         bpy.context.view_layer.objects.active = obj
+        obj['long_shift'] = shift_distance
         bpy.context.object.location[2] = shift_distance
         bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)
         obj.select_set(False)
@@ -753,10 +756,8 @@ def find_reference_ventricle_mean(objects):
     diff_to_mean = 2 * max(volumes)
     for counter, obj in enumerate(objects):  
         if abs(volumes[counter] - mean_volume) < diff_to_mean: 
-            cons_print(f"Changed reference object to {obj.name} with difference to mean: {diff_to_mean}")
             diff_to_mean = abs(volumes[counter] - mean_volume)
             bpy.types.Scene.reference_object_name = obj.name
-
     return bpy.types.Scene.reference_object_name
 
 def find_max_value_after_basal_removal(context, objects):
@@ -1563,11 +1564,12 @@ class MESH_OT_ApproachSelection(bpy.types.Operator):
         if self.approach_enum == "Op_A5": context.scene.approach = 5
         return {'FINISHED'} 
 
-class MESH_DEV_test_function(bpy.types.Operator):
+class MESH_DEV_color_min_dist(bpy.types.Operator):
     """Test function for development"""
-    bl_idname = 'heart.test_function'
+    bl_idname = 'heart.color_min_dist'
     bl_label = 'Test function for development'
     def execute(self, context):
+        #color_min_dist(context)
         test_function(context)
         return{'FINISHED'}
 
@@ -1606,12 +1608,12 @@ def compute_min_face_distance(ico_face_center, other_obj_face_centers):
         if curr_dist < dist: dist = curr_dist
     return dist
 
-# decorator?
+# !!!decorator?
 def compute_distance(ico_face_center, other_face_center):
     """Efficiently compute distance between two vectors"""
     return np.linalg.norm(ico_face_center - other_face_center)
 
-def test_function(context):
+def color_min_dist(context):
     """!!!"""
     cons_print(f"Running test function")
     # Deselect object vertices and faces
@@ -1648,6 +1650,18 @@ def test_function(context):
     # Turn off edit mode
     bpy.ops.object.editmode_toggle()
 
+def test_function(context):
+    """!!!"""
+    value = 1
+    for obj in context.selected_objects:
+        # Check if the object has a custom property named 'my_variable'
+        if not 'my_variable' in obj:
+            # If not, create the custom property
+            obj['my_variable'] = value
+        else:
+            obj['my_variable'] = value
+        value += 1
+        cons_print(f"Objekt: {obj.name} with my variable {obj['my_variable']}")
 
 class PANEL_Position_Ventricle(bpy.types.Panel):
     bl_label = "Ventricle position (mm)"
@@ -1821,8 +1835,31 @@ class PANEL_Dev_tools(bpy.types.Panel):
         row = layout.row()
         layout.operator('heart.dev_check_node_connectivity', text= "Node-connectivity check", icon = 'CHECKMARK') 
         row = layout.row()
-        layout.operator('heart.test_function', text= "Test function", icon = 'CHECKMARK') 
+        layout.operator('heart.color_min_dist', text= "Test function", icon = 'CHECKMARK') 
    
+class MyAddonPanel(bpy.types.Panel):
+    bl_label = "My Addon"
+    bl_idname = "PT_MyAddonPanel"
+    bl_space_type = 'VIEW_3D'
+    bl_region_type = 'UI'
+    bl_category = 'GVR-Pipeline'
+
+    def draw(self, context):
+        layout = self.layout
+
+        # Get the selected objects
+        selected_objects = bpy.context.selected_objects
+
+        for obj in selected_objects:
+            # Check if the object has a custom property named 'my_variable'
+            if not 'my_variable' in obj:
+                # If not, create the custom property
+                obj['my_variable'] = 0.0
+
+            # Display the custom property in the UI
+            layout.prop(obj, '["my_variable"]')
+
+
 classes = [
     PANEL_Position_Ventricle, MESH_OT_ApproachSelection,
     PANEL_Valves, PANEL_Pipeline, PANEL_Setup_Variables, MESH_OT_get_node, MESH_OT_ventricle_rotate, MESH_OT_build_valves, MESH_OT_support_struct, 
@@ -1830,7 +1867,7 @@ classes = [
     MESH_OT_create_basal, MESH_OT_connect_apical_and_basal, MESH_OT_Ventricle_Interpolation, MESH_OT_Add_Vessels_Valves, MESH_OT_check_node_connectivity,
 ]
 
-dev_classes = [PANEL_Poisson, MESH_OT_poisson, MESH_OT_create_valve_orifice, MESH_OT_connect_valves, PANEL_Dev_tools, MESH_DEV_volumes, MESH_DEV_indices, MESH_DEV_edge_index, MESH_DEV_test_function]
+dev_classes = [MyAddonPanel, PANEL_Poisson, MESH_OT_poisson, MESH_OT_create_valve_orifice, MESH_OT_connect_valves, PANEL_Dev_tools, MESH_DEV_volumes, MESH_DEV_indices, MESH_DEV_edge_index, MESH_DEV_color_min_dist]
   
 def register():
     # Position variables.
