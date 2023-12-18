@@ -220,7 +220,7 @@ def remove_multiple_basal_region(context):
     # Longitudinal shift of each ventricle to match reference object, reducing volume discrepancy between systole and diastole between raw data and reconstructed data.
     find_max_value_after_basal_removal(context, selected_objects)
     shift_ventricles_longitudinally(context, selected_objects)
-    for obj in selected_objects: cons_print(f"Objekt: {obj.name} with my longitudinal shift {obj['long_shift']}")
+    for obj in selected_objects: cons_print(f"Object: {obj.name} with my longitudinal shift of {obj['long_shift']}")
     context.scene.ref_maxima, context.scene.ref_minima = get_min_max(reference_copy)    
     # Cleanup.
     for obj in selected_objects: obj.select_set(True) # Reselect objects from original selection after main operations are executed.
@@ -330,7 +330,6 @@ def smooth_apical_region(obj, vg_orifice):
 
 def shift_ventricles_longitudinally(context, objects):
     """Shift ventricle to reference ventricle"""
-    objects = []
     for obj in objects:
         max_obj_val, min_obj_val = get_min_max(obj)
         shift_distance =  context.scene.max_apical - max_obj_val[2]
