@@ -52,7 +52,9 @@ Other file formats are also possible. But some formats e.g. wavefront (.obj) hav
 1. Sort volumes\
 Select all volumes\
 Click button 'Sort volumes'\
+```bash
 This restructures the list of selected objects such that the object with the smallest volume is the first object and all objects that were before that object are concatenated in the original order at the end of the object list. It also changes the names of the objects to the naming convention ventricle 0 ... X.
+```
 2. Setup ventricle position and rotation\
 !!!
 3. Setup valves\
