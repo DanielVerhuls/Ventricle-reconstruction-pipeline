@@ -44,15 +44,16 @@ main(args=['install','numba'])
 # Usage
 Video-tutorial:!!!\
 otherwise: \
+Open blend-file provided in the repository and follow the next steps.
 ## Import ventricle geometries 
 File→Import→.STL→All files
 Other file formats are also possible. But e.g. wavefron (.obj) have to be imported individually with Blender 3.1.
 ## Pipeline
-- Step 1
-- Step 2!!!
+0. Select all imported ventricle geometries
+1.
+2.
 
-
-
+!!!
 ## Export files
 File→Export→.STL→
 - tick ASCII checkbox
@@ -66,7 +67,7 @@ During the usage of the pipeline the longitudinal shift is saved as a variable b
 
 # Authors and acknowledgment
 - Author: Daniel Verhülsdonk
-- Supervision by: Jan-Niklas Thiel and Michael Neidlin
+- Supervision by: Jan-Niklas Thiel and Michael Neidlin 
 
 # Project status
 Development has been terminated. 
