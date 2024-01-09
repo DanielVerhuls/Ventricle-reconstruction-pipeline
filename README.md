@@ -6,7 +6,8 @@ Blender-addon for the geometric reconstruction of time-varying 3D ventricle geom
 Installation-video: !!!
 - Install Blender 3.1
 - Install Python
-- Install Python Packages bpy, open3D and numba
+- Install pip: https://pip.pypa.io/en/stable/installation/
+- Install Python Packages bpy, open3D and numba in console
 ```bash
 python.exe -m pip install --upgrade pip
 pip install bpy
@@ -43,10 +44,22 @@ main(args=['install','numba'])
 # Usage
 Video-tutorial:!!!\
 otherwise: \
-- Import ventricle geometries: File→Import→.STL→All files
-!!!
+## Import ventricle geometries 
+File→Import→.STL→All files
+Other file formats are also possible. But e.g. wavefron (.obj) have to be imported individually with Blender 3.1.
+## Pipeline
+- Step 1
+- Step 2!!!
 
 
+
+## Export files
+File→Export→.STL→
+- tick ASCII checkbox
+- Batch Mode Object
+- Selection Only tick
+- Leave name empty
+→export STL
 
 
 
