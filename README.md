@@ -63,11 +63,13 @@ This restructures the list of selected objects such that the object with the sma
     2.6. Select a single node at the ventricle septal ventricle wall and press button 'Select node at septum' or manually change location of the septal ventricle node (before transformation) using the editboxes above the button\
     2.7. Leave Edit mode\
     2.8. Unhide all ventricles and reselect them\
-    2.9. Press button 'Translate and rotate'\\
+    2.9. Press button 'Translate and rotate'\
+    \
     Three points are selected on a ventricle to translate and rotate the ventricles. These transformations of the local ventricle coordinate system to a global coordinate system streamline the handling of the ventricle objects in future steps.
 3. Setup valves\
     3.1. Open panel 'Valve options'\
-    3.2. Change positition (translation), rotation (angle) and size (radii) of the mitral and aortic valve using the textboxes\\
+    3.2. Change positition (translation), rotation (angle) and size (radii) of the mitral and aortic valve using the textboxes\
+    \
     This sets up the arrangement of the mitral and aortic valve. This inputs can be checked by pressing the buttons 'Add valve interface nodes' and 'Build support structure around valves'. Note that this will add nodes to an existing object. So consider creating a copy before pressing those buttons.
 4. Setup algorithm variables\
 !!!
