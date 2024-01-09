@@ -11,7 +11,12 @@ def hello_world():
     print("Hello, world!")
 ```
 
-!!! Njit Installation in Blender Python console
+## Installation of Blender case with addons
+In Blender go to Edit->Preferences->Add-ons:
+- Search for looptools and tick the checkbox to install it
+- Install ventricle-reconstruction-pipeline.py from repository and tick the checkbox to install it for the current blend-file
+
+## Installation of numba in Blender Python console
 ```bash
 import sys
 import subprocess
