@@ -44,17 +44,27 @@ In Blender go to Edit→Preferences→Add-ons:
 After that a new category should appear on the right side of the 3D Viewport called 'GVR-Pipeline'. Clicking it will open panels containing buttons,etc. used for the pipeline.
 # Usage
 Video-tutorial:!!!\
+Installation description:\
 Open blend-file provided in the repository and follow the following steps.
 ## Import ventricle geometries 
 File→Import→.STL→All files
 Other file formats are also possible. But some formats e.g. wavefront (.obj) have to be imported individually.
 ## Setup pipeline
 1. Sort volumes\
-    1.1. Select all volumes
-    1.2. Click button 'Sort volumes'
+    1.1. Select all volumes\
+    1.2. Click button 'Sort volumes'\
 This restructures the list of selected objects such that the object with the smallest volume is the first object and all objects that were before that object are concatenated in the original order at the end of the object list. It also changes the names of the objects to the naming convention ventricle 0 ... X.
 2. Setup ventricle position and rotation\
-    2.1. Open
+    2.1. Open panel Ventricle position (mm)\
+    2.2. Select only one ventricle and hide the others ('h'key while selected)\
+    2.3. Go into Edit mode\
+    2.4. Select a single node centrally in the basal region and press button 'Select basal node' or manually change location of the basal node (before transformation) using the editboxes above the button\
+    2.5. Select a single node at the ventricle apex and press button 'Select apex node' or manually change location of the apex node (before transformation) using the editboxes above the button\
+    2.6. Select a single node at the ventricle septal ventricle wall and press button 'Select node at septum' or manually change location of the septal ventricle node (before transformation) using the editboxes above the button\
+    2.7. Leave Edit mode\
+    2.8. Unhide all ventricles and reselect them\
+    2.9. Press button 'Translate and rotate'\
+    Three points are selected on a ventricle to translate and rotate the ventricles. These transformations of the local ventricle coordinate system to a global coordinate system streamline the handling of the ventricle objects in future steps.
 3. Setup valves\
 !!!
 4. Setup algorithm variables\
