@@ -6,14 +6,13 @@ Blender-addon for the geometric reconstruction of time-varying 3D ventricle geom
 Installation-video: !!!
 - Install Blender 3.1
 - Install Python
-
-!!!
-
-```python
-def hello_world():
-    print("Hello, world!")
+- Install Python Packages bpy, open3D and numba
+```bash
+python.exe -m pip install --upgrade pip
+pip install bpy
+pip install open3d
+pip install numba
 ```
-
 ## Running Blender with Python environment variables
 Windows: Run Powershell
 Go to the directory of Blender and run it with Python system environment
@@ -41,7 +40,7 @@ ensurepip.bootstrap()
 from pip._internal import main
 main(args=['install','numba'])
 ```
-## Usage
+# Usage
 Video-tutorial:!!!\
 otherwise: \
 - Import ventricle geometries: File→Import→.STL→All files
@@ -52,17 +51,17 @@ otherwise: \
 
 
 
-## Visualization of distance to original
-During the usage of the pipeline the longitudinal shift is saved as a variable bound to the respective object (ventricle 0 ... X). The user has to re-import the raw data and rename it to 'ref_obj'. While the reconstructed object is selected pressing the button 'Color minimal distance to raw object' will compute the minimal distance from each face-center of the reconstructed ventricle to any face-center of the reference object. The faces of the object are then colored with the distances which are normalized with the maximum value resulting in a scale from 0 to 1 (blue→white→red). To view the colors select 'Material Preview' in Blender (top right in 3D Viewport). 
+## Optional: Visualization of distance to original
+During the usage of the pipeline the longitudinal shift is saved as a variable bound to the respective object (ventricle 0 ... X). The user has to re-import the raw data and rename it to 'ref_obj'. While the reconstructed object is selected pressing the button 'Color minimal distance to raw object' will compute the minimal distance from each face-center of the reconstructed ventricle to any face-center of the reference object resulting in a 3d-representation of the !!!!falsch so!!!Hausdorff distance!!!. The faces of the object are then colored with the distances which are normalized with the maximum value resulting in a scale from 0 to 1 (blue→white→red). To view the colors select 'Material Preview' in Blender (top right in 3D Viewport). 
 
-## Authors and acknowledgment
+# Authors and acknowledgment
 - Author: Daniel Verhülsdonk
 - Supervision by: Jan-Niklas Thiel and Michael Neidlin
 
-## Project status
+# Project status
 Development has been terminated. 
 
-## License
+# License
 MIT License
 
 Copyright (c) [2024] [Institute of Applied Medical Engineering - Cardiovascular Engineering (AME-CVE) RWTH Aachen]
