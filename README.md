@@ -6,23 +6,25 @@ Blender-addon for the geometric reconstruction of time-varying 3D ventricle geom
 # Installation
 !!!
 
-```python
+```
 def hello_world():
     print("Hello, world!")
 ```
 
 !!! Njit Installation in Blender Python console
+```
 import sys
 import subprocess
 subprocess.call([sys.exec_prefix + '\\bin\\python.exe', '-m', 'ensurepip'])
 subprocess.call([sys.exec_prefix + '\\bin\\python.exe', '-m', 'pip', 'install', 'numba'])
-# if pip is missing
+```
+If pip is missing (Output 0 i´n Blender Python console):
+```
 import ensurepip
 ensurepip.bootstrap()
-# install with the pip module
 from pip._internal import main
 main(args=['install','numba'])
-
+```
 
 ## Usage
 
