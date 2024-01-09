@@ -1,7 +1,7 @@
 bl_info = {
     "name" : "Geometrical heart reconstrucion", 
     "author" : "Daniel Verhuelsdonk",
-    "version" : (1, 29),
+    "version" : (1, 30),
     "blender" : (3, 1, 0),
     "location" : "Operator Search",
     "description": "Panel and operators to geometrically reconstruct the upper heart shape",
@@ -12,11 +12,13 @@ bl_info = {
 # Imports
 from msilib.schema import Icon
 import bpy
+import numba as nb
+import numpy as np
 import bmesh
 import math
 import mathutils 
-import numpy as np
 import open3d as o3d
+
 
 scene = bpy.types.Scene
 
@@ -131,12 +133,12 @@ class MESH_OT_ventricle_rotate(bpy.types.Operator):
 
 def rotate_ventricle(context):
     """Rotate ventricle geometry using three points on the ventricle"""
-## Coniditions to terminate the code.
+    ## Coniditions to terminate the code.
     if bpy.context.mode != 'OBJECT': bpy.ops.object.editmode_toggle() # Toggle to object mode.
     if len(bpy.context.selected_objects) < 1:# Only works if and object is selected
         cons_print("No object selected.")
         return False
-## Precompute the rotation angles using the relative positions between top, bottom and septum node.
+    ## Precompute the rotation angles using the relative positions between top, bottom and septum node.
     # Initialize points.
     top = mathutils.Vector((context.scene.pos_top[0], context.scene.pos_top[1], context.scene.pos_top[2]))
     bottom = mathutils.Vector((context.scene.pos_bot[0], context.scene.pos_bot[1], context.scene.pos_bot[2]))
@@ -161,7 +163,7 @@ def rotate_ventricle(context):
     rot_matrix_three = np.array([[math.cos(angle_z), -math.sin(angle_z), 0], [math.sin(angle_z), math.cos(angle_z), 0], [0, 0, 1]]) 
     third_rot_septum = rot_matrix_three.dot(double_rot_septum)
     context.scene.pos_septum = (round(abs(third_rot_septum[0]), 6), round(abs(third_rot_septum[1]), 6), round(abs(third_rot_septum[2]), 6)) # Update UI septum-variables.
-## Translation and rotation-process for all selected objects.
+    ## Translation and rotation-process for all selected objects.
     # Translation.
     if context.scene.pos_bot != (0, 0, 0):   
         # Translate Coordinate system to (0,0,0) by subtracting the bottom node for easier rotation
@@ -1618,8 +1620,10 @@ def compute_min_face_distance(ico_face_center, other_obj_face_centers):
     return dist
 
 # !!!decorator?
+@nb.njit
 def compute_distance(ico_face_center, other_face_center):
     """Efficiently compute distance between two vectors"""
+    cons_print(f"types: {type(ico_face_center)} and {type(other_face_center)}")
     return np.linalg.norm(ico_face_center - other_face_center)
 
 def color_min_dist(context):
@@ -1791,11 +1795,11 @@ class PANEL_Pipeline(bpy.types.Panel):
         row = layout.row()
         layout.operator('heart.sort_ventricles', text= "Sort volumes", icon = 'EVENT_F1')
         row = layout.row()
-        row.label(text= "Setup ventricle position and rotation", icon = 'EVENT_F2') #!!! als button der diesen reiter oeffnet
+        row.label(text= "Setup ventricle position and rotation", icon = 'EVENT_F2')
         row = layout.row()
-        row.label(text= "Setup valves", icon = 'EVENT_F3') #!!! als button der diesen reiter oeffnet
+        row.label(text= "Setup valves", icon = 'EVENT_F3')
         row = layout.row()
-        row.label(text= "Setup algorithm variables", icon = 'EVENT_F4') #!!! als button der diesen reiter oeffnet
+        row.label(text= "Setup algorithm variables", icon = 'EVENT_F4')
         row = layout.row()
         row.label(text= f"Current approach: A{context.scene.approach}")
         row = layout.row()
