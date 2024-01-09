@@ -53,10 +53,10 @@ Other file formats are also possible. But some formats e.g. wavefront (.obj) hav
 1. Sort volumes\
     1.1. Select all volumes\
     1.2. Click button 'Sort volumes'\
-This restructures the list of selected objects such that the object with the smallest volume is the first object and all objects that were before that object are concatenated in the original order at the end of the object list. It also changes the names of the objects to the naming convention ventricle 0 ... X.
+This restructures the list of selected objects such that the object with the smallest volume is the first object and all objects that were before that object are concatenated in the original order at the end of the object list. It also changes the names of the objects to the naming convention ventricle 0 ... X.\
 2. Setup ventricle position and rotation\
     2.1. Open panel 'Ventricle position (mm)'\
-    2.2. Select only one ventricle and hide the others ('h'key while selected)\
+    2.2. Select only one ventricle and hide the others ('h'-key while selected)\
     2.3. Go into Edit mode\
     2.4. Select a single node centrally in the basal region and press button 'Select basal node' or manually change location of the basal node (before transformation) using the editboxes above the button\
     2.5. Select a single node at the ventricle apex and press button 'Select apex node' or manually change location of the apex node (before transformation) using the editboxes above the button\
@@ -65,12 +65,12 @@ This restructures the list of selected objects such that the object with the sma
     2.8. Unhide all ventricles and reselect them\
     2.9. Press button 'Translate and rotate'\
     \
-    Three points are selected on a ventricle to translate and rotate the ventricles. These transformations of the local ventricle coordinate system to a global coordinate system streamline the handling of the ventricle objects in future steps.
+    Three points are selected on a ventricle to translate and rotate the ventricles. These transformations of the local ventricle coordinate system to a global coordinate system streamline the handling of the ventricle objects in future steps.\
 3. Setup valves\
     3.1. Open panel 'Valve options'\
     3.2. Change positition (translation), rotation (angle) and size (radii) of the mitral and aortic valve using the textboxes\
     \
-    This sets up the arrangement of the mitral and aortic valve. This inputs can be checked by pressing the buttons 'Add valve interface nodes' and 'Build support structure around valves'. Note that this will add nodes to an existing object. So consider creating a copy before pressing those buttons.
+    This sets up the arrangement of the mitral and aortic valve. This inputs can be checked by pressing the buttons 'Add valve interface nodes' and 'Build support structure around valves'. Note that this will add nodes to an existing object. So consider creating a copy before pressing those buttons.\
 4. Setup algorithm variables\
 !!!
 5. Select approach\
