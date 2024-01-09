@@ -48,11 +48,17 @@ Open blend-file provided in the repository and follow the next steps.
 ## Import ventricle geometries 
 File→Import→.STL→All files
 Other file formats are also possible. But e.g. wavefron (.obj) have to be imported individually with Blender 3.1.
-## Pipeline
-0. Select all imported ventricle geometries
-1.
-2.
-
+## Setup pipeline
+0. Select all imported ventricle geometries\
+!!!
+1. Sort volumes
+2. Setup ventricle position and rotation
+3. Setup valves
+4. Setup algorithm variables
+5. Select approach!!!
+## Run pipeline
+Select all ventricles and either run all steps with the button Quick reconstruction or do the following steps for a more comprehensive execution of the pipeline:
+1. Press button 'Remove basal region' !!!
 !!!
 ## Export files
 File→Export→.STL→
