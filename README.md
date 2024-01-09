@@ -12,32 +12,32 @@ def hello_world():
 ```
 
 ## Installation of Blender case with addons
+After opening Blender 3.1 load the blend-file provided in the repository. It contains objects used in the addon.
 In Blender go to Edit->Preferences->Add-ons:
 - Search for looptools and tick the checkbox to install it
 - Install ventricle-reconstruction-pipeline.py from repository and tick the checkbox to install it for the current blend-file
 
 ## Installation of numba in Blender Python console
+Open the integrated Blender Python console
 ```bash
 import sys
 import subprocess
 subprocess.call([sys.exec_prefix + '\\bin\\python.exe', '-m', 'ensurepip'])
 subprocess.call([sys.exec_prefix + '\\bin\\python.exe', '-m', 'pip', 'install', 'numba'])
 ```
-If pip is missing (Output 0 i´n Blender Python console):
+If pip is missing (Output 0 in Blender Python console):
 ```bash
 import ensurepip
 ensurepip.bootstrap()
 from pip._internal import main
 main(args=['install','numba'])
 ```
-
 ## Usage
+- Import ventricle geometries: File→Import→.STL→All files
 
 
 
 
-Looptools package is used for this application.
-!!!
 
 
 ## Visualization of distance to original
