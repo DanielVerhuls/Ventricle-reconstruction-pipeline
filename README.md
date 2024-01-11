@@ -53,6 +53,7 @@ Other file formats are also possible. But some formats e.g. wavefront (.obj) hav
 1. Sort volumes\
     1.1. Select all volumes\
     1.2. Click button 'Sort volumes'\
+    \
     This restructures the list of selected objects such that the object with the smallest volume is the first object and all objects that were before that object are concatenated in the original order at the end of the object list. It also changes the names of the objects to the naming convention ventricle 0 ... X.
 2. Setup ventricle position and rotation\
     2.1. Open panel 'Ventricle position (mm)'\
@@ -68,11 +69,17 @@ Other file formats are also possible. But some formats e.g. wavefront (.obj) hav
     Three points are selected on a ventricle to translate and rotate the ventricles. These transformations of the local ventricle coordinate system to a global coordinate system streamline the handling of the ventricle objects in future steps.
 3. Setup valves\
     3.1. Open panel 'Valve options'\
-    3.2. Change positition (translation), rotation (angle) and size (radii) of the mitral and aortic valve using the textboxes\
+    3.2. Change positition (translation), rotation (angle) and size (radii) of the mitral and aortic valve using the respective textboxes\
     \
     This sets up the arrangement of the mitral and aortic valve. This inputs can be checked by pressing the buttons 'Add valve interface nodes' and 'Build support structure around valves'. Note that this will add nodes to an existing object. So consider creating a copy before pressing those buttons.\
-4. Setup algorithm variables
-!!!
+4. Setup algorithm variables\
+    4.1. Open panel 'Algorithm setup variables'\
+    4.2. Change variables for the algorithm. Threshold needs to be adjusted depending on geometry and the other are more advanced options.
+    \
+    Description variables:\
+    - test
+    - test
+    - test
 5. Select approach\
 !!!
 ## Run pipeline
