@@ -1812,7 +1812,7 @@ class PANEL_Pipeline(bpy.types.Panel):
         row = layout.row()
         layout.operator('heart.create_basal', text= "Create basal region", icon = 'SPHERECURVE')
         row = layout.row()
-        layout.operator('heart.connect_apical_and_basal', text= "Connect basal and apical parts", icon = 'ORPHAN_DATA')
+        layout.operator('heart.connect_apical_and_basal', text= "Connect basal and apical regions", icon = 'ORPHAN_DATA')
         row = layout.row()
         layout.operator('heart.add_vessels_valves', text= "Add atrium, aorta and valves", icon = 'HANDLE_AUTO')
         row = layout.row()

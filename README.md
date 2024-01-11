@@ -74,7 +74,7 @@ Other file formats are also possible. But some formats e.g. wavefront (.obj) hav
     This sets up the arrangement of the mitral and aortic valve. This inputs can be checked by pressing the buttons 'Add valve interface nodes' and 'Build support structure around valves'. Note that this will add nodes to an existing object. So consider creating a copy before pressing those buttons.\
 4. Setup algorithm variables\
     4.1. Open panel 'Algorithm setup variables'\
-    4.2. Change variables for the algorithm. Threshold needs to be adjusted depending on geometry and the other are more advanced options.
+    4.2. Change variables for the algorithm. Threshold needs to be adjusted depending on geometry and the other are more advanced options.\
     \
     Description variables:
     - Threshold for basal region removal: Cartesian z-coordinate. All vertices above this threshold are deleted during the basal region removal
@@ -89,25 +89,35 @@ Other file formats are also possible. But some formats e.g. wavefront (.obj) hav
     - Smoothing repetitions: Used in smoothing the connection of basal and apical region. Amount of smoothing repetitions each with a wider node selection (all neighbours of previous selection are selected)
 5. Select approach\
     5.1. In Panel 'Geometric ventricle reconstrucion pipeline press button 'Select approach'\
-    5.2. In pop-up window choose approach from drop-down menu and confirm with 'OK'
+    5.2. In pop-up window choose approach from drop-down menu and confirm with 'OK'\
+    \
+    Change the valve modeling approach.
 ## Run pipeline
-Select all ventricles and either run all steps with the button Quick reconstruction or do the following steps for a more comprehensive execution of the pipeline:
+Select all ventricle objects and either run all steps with the button 'Quick reconstruction' in the panel 'Geometric ventricle reconstruction pipeline' or do the following steps for a more comprehensive execution of the pipeline:
 1. Remove basal region\
-Press button 'Remove basal region' !!! description
+    1.1. Press button 'Remove basal region' in the panel 'Geometric ventricle reconstruction pipeline'\
+    \
+    This removes all vertices above the z-value for a reference ventricle. The vertices of the other ventricle object with identical indices to the deleted one in the reference are also deleted. The upper edge loop is smoothed such that all its vertices lay on the same xy-plane. Lastly the ventricle objects are shifted along the z-axis such that all xy-planes match with the reference ventricle xy-plane.
 2. Create basal region\
-!!!
+    2.1. Press button 'Create basal region' in the panel 'Geometric ventricle reconstruction pipeline'\
+    \
+    This creates a reference basal region used for all ventricle objects. For that first the valve indices and a support structure are added to a copy of the reference ventricle. Then the Poisson surface reconstruction is applied to the vertices to create a surface object from all vertices. After that the object is remeshed and the apical region is removed while smoothing the lower edge loop of the resulting basal region.
 3. Connect basal and apical parts\
-!!!
+    3.1. Press button 'Connect basal and apical regions' in the panel 'Geometric ventricle reconstruction pipeline'\
+    \
+    This creates a copy of the reference basal region for all apical region ventricle objects and connects them with the looptools_bridge function from the Blender addon Looptools. Since this connection creates long quadrangular faces, the faces need to be split using an insetting algorithm leading to faces where the deviation of edge lengths are reduced. After that the faces are triangulated and smoothed. These processes are done for the reference ventricle object first and then copied to the other ventricles.
 4. Add atrium, aorta and valves\
-!!!
+    4.1. Press button 'Add atrium, aorta and valves' in the panel 'Geometric ventricle reconstruction pipeline'\
+    \
+    This copies objects for aorta, atrium, mitral and aortic valve found in the Blender-project and scales, rotates and positions them at their respective places.
 ## Export files
 Select all files to export in Blender.
 File→Export→.STL→
 - tick ASCII checkbox
 - Batch Mode Object
-- tick selection Only checkbox
+- tick selection nnly checkbox
 - keep the other options at default
-- Leave name empty\
+- leave name empty\
 →export STL
 ## Optional: Visualization of distance to original
 During the usage of the pipeline the longitudinal shift is saved as a variable bound to the respective object (ventricle 0 ... X). The user has to re-import the raw data and rename it to 'ref_obj'. While the reconstructed object is selected pressing the button 'Color minimal distance to raw object' will compute the minimal distance from each face-center of the reconstructed ventricle to any face-center of the reference object resulting in a 3d-representation of the Hausdorff distance (https://cgm.cs.mcgill.ca/~godfried/teaching/cg-projects/98/normand/main.html). The faces of the object are then colored with the distances which are normalized with the maximum value resulting in a scale from 0 to 1 (blue→white→red). To view the colors select 'Material Preview' in Blender (top right in 3D Viewport). 
