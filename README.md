@@ -76,12 +76,20 @@ Other file formats are also possible. But some formats e.g. wavefront (.obj) hav
     4.1. Open panel 'Algorithm setup variables'\
     4.2. Change variables for the algorithm. Threshold needs to be adjusted depending on geometry and the other are more advanced options.
     \
-    Description variables:\
-    - test
-    - test
-    - test
+    Description variables:
+    - Threshold for basal region removal: Cartesian z-coordinate. All vertices above this threshold are deleted during the basal region removal
+    - Time RR-duration: Cardiac cycle duration (RR-time)
+    - Time diastole: Diastole duration
+    - Frames after interpolation: When using approach A5 the ventricle objects are interpolated to this amount of timeframes
+    - Depth of poisson surface reconstruction algorithm: Maximum tree depth for Poisson surface reconstruction (https://hhoppe.com/poissonrecon.pdf)
+    - Twist during connection algorithm: Value for 'twist'-variable used in the bridge function of the looptools addon used to connect the apical and the basal region. (Usally the default value 0 fits best)
+    - Refinement steps for insetting faces: Amount of iterations of insetting faces during the connection algorithm
+    - Maximum smoothing iterations: Used in smoothing the connection of basal and apical region. Highest (initial) smoothing value
+    - Minimum smoothing iterations: Used in smoothing the connection of basal and apical region. Smallest smoothing value
+    - Smoothing repetitions: Used in smoothing the connection of basal and apical region. Amount of smoothing repetitions each with a wider node selection (all neighbours of previous selection are selected)
 5. Select approach\
-!!!
+    5.1. In Panel 'Geometric ventricle reconstrucion pipeline press button 'Select approach'\
+    5.2. In pop-up window choose approach from drop-down menu and confirm with 'OK'
 ## Run pipeline
 Select all ventricles and either run all steps with the button Quick reconstruction or do the following steps for a more comprehensive execution of the pipeline:
 1. Remove basal region\
@@ -105,7 +113,7 @@ File→Export→.STL→
 During the usage of the pipeline the longitudinal shift is saved as a variable bound to the respective object (ventricle 0 ... X). The user has to re-import the raw data and rename it to 'ref_obj'. While the reconstructed object is selected pressing the button 'Color minimal distance to raw object' will compute the minimal distance from each face-center of the reconstructed ventricle to any face-center of the reference object resulting in a 3d-representation of the Hausdorff distance (https://cgm.cs.mcgill.ca/~godfried/teaching/cg-projects/98/normand/main.html). The faces of the object are then colored with the distances which are normalized with the maximum value resulting in a scale from 0 to 1 (blue→white→red). To view the colors select 'Material Preview' in Blender (top right in 3D Viewport). 
 # Authors and acknowledgment
 - Author: Daniel Verhülsdonk
-- Supervision by: Jan-Niklas Thiel and Michael Neidlin 
+- Supervision by: Jan-Niklas Thiel and Michael Neidlin (neidlin@ame.rwth-aachen.de)
 
 # Project status
 Development has been terminated. 

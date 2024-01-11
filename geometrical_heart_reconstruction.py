@@ -1767,9 +1767,9 @@ class PANEL_Setup_Variables(bpy.types.Panel):
         row = layout.row()
         row.label(text= "Connection initialization variables") 
         row = layout.row()
-        layout.prop(context.scene, "connection_twist", text="Twist during connecting algorithm for the function looptools_bridge")
+        layout.prop(context.scene, "connection_twist", text="Twist during connecting algorithm")
         row = layout.row()
-        layout.prop(context.scene, "inset_faces_refinement_steps", text="Refinement steps for insetting faces during connection algorithm")
+        layout.prop(context.scene, "inset_faces_refinement_steps", text="Refinement steps for insetting faces")
         row = layout.row()
         row.label(text= "Connection smoothing variales") 
         row = layout.row()
@@ -1777,7 +1777,7 @@ class PANEL_Setup_Variables(bpy.types.Panel):
         row = layout.row()
         layout.prop(context.scene, "min_con_sm_iter", text="Minimum smoothing iterations")
         row = layout.row()
-        layout.prop(context.scene, "sm_reps", text="Smoothing repetitions with a wider node selection each")
+        layout.prop(context.scene, "sm_reps", text="Smoothing repetitions")
       
 class PANEL_Pipeline(bpy.types.Panel):
     bl_label = "Geometric ventricle reconstruction pipeline"
