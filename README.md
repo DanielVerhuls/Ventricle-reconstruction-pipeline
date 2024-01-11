@@ -77,7 +77,7 @@ Other file formats are also possible. But some formats e.g. wavefront (.obj) hav
     \
     Description variables:
     - Threshold for basal region removal: Cartesian z-coordinate. All vertices above this threshold are deleted during the basal region removal
-    - Time RR-duration: Cardiac cycle duration (RR-time)
+    - Time RR-duration: Cardiac cycle duration
     - Time diastole: Diastole duration
     - Frames after interpolation: When using approach A5 the ventricle objects are interpolated to this amount of timeframes
     - Depth of poisson surface reconstruction algorithm: Maximum tree depth for Poisson surface reconstruction (https://hhoppe.com/poissonrecon.pdf)
@@ -104,7 +104,7 @@ Select all ventricle objects and either run all steps with the button 'Quick rec
 3. Connect basal and apical parts\
     3.1. Press button 'Connect basal and apical regions' in the panel 'Geometric ventricle reconstruction pipeline'\
     \
-    This creates a copy of the reference basal region for all apical region ventricle objects and connects them with the looptools_bridge function from the Blender addon Looptools. Since this connection creates long quadrangular faces, the faces need to be split using an insetting algorithm leading to faces where the deviation of edge lengths are reduced. After that the faces are triangulated and smoothed. These processes are done for the reference ventricle object first and then copied to the other ventricles.
+    This creates a copy of the reference basal region for all apical region ventricle objects and connects them with the looptools_bridge function from the Blender addon Looptools. Since this connection creates long quadrangular faces, the faces need to be split using an integrated insetting algorithm leading to faces where the deviation of edge lengths are reduced. After that the faces are triangulated and smoothed. These processes are done for the reference ventricle object first and then copied to the other ventricles.
 4. Add atrium, aorta and valves\
     4.1. Press button 'Add atrium, aorta and valves' in the panel 'Geometric ventricle reconstruction pipeline'\
     \
