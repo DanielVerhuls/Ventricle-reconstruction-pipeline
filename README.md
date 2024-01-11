@@ -1,7 +1,6 @@
 # Geometric-ventricle-reconstruction Pipeline
 ## Description
-Blender-addon for the geometric reconstruction of time-varying 3D ventricle geometries lacking clear mitral and aortic valve interfaces.!!!
-
+Blender-addon for the geometric reconstruction of time-varying 3D ventricle geometries lacking good spatial resolution of mitral and aortic valve interfaces. Paper-link:!!!
 # Installation
 Installation-video: !!!
 - Install Blender 3.1
@@ -40,7 +39,7 @@ main(args=['install','numba'])
 ## Installation of Blender case with addons
 In Blender go to Edit→Preferences→Add-ons:
 - Search for looptools and tick the checkbox to install it
-- Install ventricle-reconstruction-pipeline.py from repository and tick the checkbox to install it for the current blend-file
+- Install ventricle-reconstruction-pipeline.py from repository and tick the checkbox to install it for the current blend-file\
 After that a new category should appear on the right side of the 3D Viewport called 'GVR-Pipeline'. Clicking it will open panels containing buttons,etc. used for the pipeline.
 # Usage
 Video-tutorial:!!!\
@@ -88,7 +87,7 @@ Other file formats are also possible. But some formats e.g. wavefront (.obj) hav
     - Minimum smoothing iterations: Used in smoothing the connection of basal and apical region. Smallest smoothing value
     - Smoothing repetitions: Used in smoothing the connection of basal and apical region. Amount of smoothing repetitions each with a wider node selection (all neighbours of previous selection are selected)
 5. Select approach\
-    5.1. In Panel 'Geometric ventricle reconstrucion pipeline press button 'Select approach'\
+    5.1. In panel 'Geometric ventricle reconstrucion pipeline press button 'Select approach'\
     5.2. In pop-up window choose approach from drop-down menu and confirm with 'OK'\
     \
     Change the valve modeling approach.
