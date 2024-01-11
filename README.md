@@ -39,8 +39,8 @@ main(args=['install','numba'])
 ## Installation of Blender case with addons
 In Blender go to Edit→Preferences→Add-ons:
 - Search for looptools and tick the checkbox to install it
-- Install ventricle-reconstruction-pipeline.py from repository and tick the checkbox to install it for the current blend-file\
-After that a new category should appear on the right side of the 3D Viewport called 'GVR-Pipeline'. Clicking it will open panels containing buttons,etc. used for the pipeline.
+- Install ventricle-reconstruction-pipeline.py from repository and tick the checkbox to install it for the current blend-file
+- After that a new category should appear on the right side of the 3D Viewport called 'GVR-Pipeline'. Clicking it will open panels containing buttons,etc. used for the pipeline.
 # Usage
 Video-tutorial:!!!\
 Installation description:\
