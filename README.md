@@ -104,7 +104,7 @@ Select all ventricle objects and either run all steps with the button 'Quick rec
 3. Connect basal and apical parts\
     3.1. Press button 'Connect basal and apical regions' in the panel 'Geometric ventricle reconstruction pipeline'\
     \
-    This creates a copy of the reference basal region for all apical region ventricle objects and connects them with the looptools_bridge function from the Blender addon Looptools. Since this connection creates long quadrangular faces, the faces need to be split using an integrated insetting algorithm leading to faces where the deviation of edge lengths are reduced. After that the faces are triangulated and smoothed. These processes are done for the reference ventricle object first and then copied to the other ventricles.
+    This creates a copy of the reference basal region for all apical region ventricle objects and connects them with the looptools_bridge function from the Blender addon Looptools. Since this connection creates long quadrangular faces, the faces need to be split using an integrated insetting algorithm leading to faces where the deviation of edge lengths are reduced. After that the faces are triangulated and iteratively smoothed. These processes are done for the reference ventricle object first and then copied to the other ventricles to remain node-connectivity.
 4. Add atrium, aorta and valves\
     4.1. Press button 'Add atrium, aorta and valves' in the panel 'Geometric ventricle reconstruction pipeline'\
     \
@@ -118,7 +118,8 @@ File→Export→.STL→
 - keep the other options at default
 - leave name empty\
 →export STL
-## Optional: Visualization of distance to original
+## Optional: Development tools
+### Visualization of distance to original
 During the usage of the pipeline the longitudinal shift is saved as a variable bound to the respective object (ventricle 0 ... X). The user has to re-import the raw data and rename it to 'ref_obj'. While the reconstructed object is selected pressing the button 'Color minimal distance to raw object' will compute the minimal distance from each face-center of the reconstructed ventricle to any face-center of the reference object resulting in a 3d-representation of the Hausdorff distance (https://cgm.cs.mcgill.ca/~godfried/teaching/cg-projects/98/normand/main.html). The faces of the object are then colored with the distances which are normalized with the maximum value resulting in a scale from 0 to 1 (blue→white→red). To view the colors select 'Material Preview' in Blender (top right in 3D Viewport). 
 # Authors and acknowledgment
 - Author: Daniel Verhülsdonk
