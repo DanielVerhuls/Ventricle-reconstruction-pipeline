@@ -46,7 +46,7 @@ Video-tutorial:!!!\
 Installation description:\
 Open blend-file provided in the repository and follow the following steps.
 ## Import ventricle geometries 
-File→Import→.STL→All files
+File→Import→.STL→All files\
 Other file formats are also possible. But some formats e.g. wavefront (.obj) have to be imported individually.
 ## Setup pipeline
 1. Sort volumes\
