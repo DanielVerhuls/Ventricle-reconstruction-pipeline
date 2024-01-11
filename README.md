@@ -70,7 +70,7 @@ Other file formats are also possible. But some formats e.g. wavefront (.obj) hav
     3.1. Open panel 'Valve options'\
     3.2. Change positition (translation), rotation (angle) and size (radii) of the mitral and aortic valve using the respective textboxes\
     \
-    This sets up the arrangement of the mitral and aortic valve. (These inputs can be checked by pressing the buttons 'Add valve interface nodes' and 'Build support structure around valves'. Note that this will add nodes to an existing object. So consider creating a copy before pressing those buttons.)\
+    This sets up the arrangement of the mitral and aortic valve. (These inputs can be checked by pressing the buttons 'Add valve interface nodes' and 'Build support structure around valves'. Note that this will add nodes to an existing object. So consider creating a copy before pressing those buttons.)
 4. Setup algorithm variables\
     4.1. Open panel 'Algorithm setup variables'\
     4.2. Change variables for the algorithm. Threshold needs to be adjusted depending on geometry and the other are more advanced options.\
