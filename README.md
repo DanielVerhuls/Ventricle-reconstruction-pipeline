@@ -73,7 +73,7 @@ Other file formats are also possible. But some formats e.g. wavefront (.obj) hav
     This sets up the arrangement of the mitral and aortic valve. (These inputs can be checked by pressing the buttons 'Add valve interface nodes' and 'Build support structure around valves'. Note that this will add nodes to an existing object. So consider creating a copy before pressing those buttons.)
 4. Setup algorithm variables\
     4.1. Open panel 'Algorithm setup variables'\
-    4.2. Change variables for the algorithm. Threshold needs to be adjusted depending on geometry and the other are more advanced options.\
+    4.2. Change variables for the algorithm. Threshold needs to be adjusted depending on geometry. The other settings are advanced and should not be changed lightly.\
     \
     Description variables:
     - Threshold for basal region removal: Cartesian z-coordinate. All vertices above this threshold are deleted during the basal region removal
