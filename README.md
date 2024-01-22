@@ -79,6 +79,7 @@ Other file formats are also possible. But some formats e.g. wavefront (.obj) hav
     \
     Description variables:
     - Threshold for basal region removal: Cartesian z-coordinate. All vertices above this threshold are deleted during the basal region removal
+    - Use mean instead of max volume as reference: Changes the method for finding the reference ventricle to either the max or mean volume (True = Mean volume, False = Max volume)
     - Time RR-duration: Cardiac cycle duration
     - Time diastole: Diastole duration
     - Frames after interpolation: When using approach A5 the ventricle objects are interpolated to this amount of timeframes

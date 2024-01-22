@@ -231,7 +231,9 @@ def remove_multiple_basal_region(context):
 
 def remove_basal_region(context, obj, del_nodes):
     """Remove basal region of the ventricle using a threshold"""
-    if obj.mode == 'EDIT': bpy.ops.object.mode_set(mode='OBJECT') # Toggle to object mode.
+    if obj.mode == 'EDIT': 
+        bpy.context.tool_settings.mesh_select_mode = (True, False, False) # Go into vertex mode
+        bpy.ops.object.mode_set(mode='OBJECT') # Toggle to object mode.
     obj.select_set(True)
     bpy.context.view_layer.objects.active = obj
     deselect_object_vertices(obj)
@@ -247,6 +249,7 @@ def remove_basal_region(context, obj, del_nodes):
         for v in bm.verts:
             if v.index in del_nodes: v.select = True
     bm.to_mesh(obj.data) # Update selection to object.
+    sad
     ## Remove selected nodes.
     bpy.ops.object.mode_set(mode='EDIT') 
     bpy.ops.mesh.delete_edgeloop()
@@ -809,7 +812,6 @@ def create_basal_region_for_object(context, reference_copy):
     # Remove nodes in valve areas, insert of interface nodes and smooth the basal region.
     create_valve_orifice(context, "Aortic")
     create_valve_orifice(context, "Mitral")
-    
     basal_regions = insert_valves_into_basal(context, poisson_basal) # Create exact inputs for the valve boundaries and connect it with the remaining basal region.
     for basal in basal_regions: basal.select_set(False)
     for basal in basal_regions: smooth_basal_region(context, basal, voxel_size) # Smooth basal region nodes excluding valves and lower edge loop.
