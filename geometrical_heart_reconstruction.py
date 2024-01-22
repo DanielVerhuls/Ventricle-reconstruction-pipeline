@@ -541,7 +541,6 @@ def create_valve_orifice(context, valve_mode):
     bpy.context.tool_settings.mesh_select_mode = (False, True, False)
     bm = transfer_data_to_mesh(obj)
     vertices_orifice = []
-    sad
     # Select vertices of newly created face after dissolving.
     for f in bm.faces:
         f.select = False
@@ -549,7 +548,6 @@ def create_valve_orifice(context, valve_mode):
         if distance_vec(f.calc_center_median(), translation) < min(radius_vertical, radius_horizontal)  / 2: 
             for v in f.verts: vertices_orifice.append(v.index)
             f.select = True
-
     # Delete face in orifice.
     faces = [f for f in bm.faces if f.select]
     bmesh.ops.delete(bm, geom = faces, context = 'FACES_ONLY')
@@ -583,7 +581,7 @@ def select_valve_vertices(context, valve_mode):
     for v in selected_verts: 
         if v.co.z > -1: v.select = True 
     # Exclude vertice in lower basal edge loopa
-    for group in bpy.context.active_object.vertex_groups:
+    for group in bpy.context.active_object.vertex_groups: #!!! optiomierbar
         if group.name == "lower_basal_edge_loop":
             bpy.ops.object.vertex_group_set_active(group=group.name)
             bpy.ops.object.vertex_group_deselect()
@@ -649,9 +647,9 @@ def smooth_relax_edgeloop(obj, vg_orifice):
     bpy.ops.object.mode_set(mode='EDIT') 
     bpy.context.tool_settings.mesh_select_mode = (True, False, False) # Activate edge mode in edit mode.
     i = 0 # Breakup-condition for while-loop to prevent infinite loops.
-    while select_vertices_outside_of_edge_loop(obj) and i < 100: # Select vertices with only two neighbours.
+    while select_vertices_outside_of_edge_loop(obj) and i < 100: # Select vertices with only two neighbours. 100 is to prevent infinite loops.
         i = i + 1
-        bpy.ops.object.mode_set(mode='OBJECT') # Update Mehs in Blender.
+        bpy.ops.object.mode_set(mode='OBJECT') # Update Mesh in Blender.
         bpy.ops.object.mode_set(mode='EDIT') 
         bpy.ops.mesh.delete(type='VERT') # Remove selected vertices.
         # Reselect vertices in orifice vertex group.
@@ -661,6 +659,8 @@ def smooth_relax_edgeloop(obj, vg_orifice):
     bpy.ops.object.mode_set(mode='EDIT') 
     bpy.ops.object.vertex_group_set_active(group=str(vg_orifice.name))
     bpy.ops.object.vertex_group_select()
+    bpy.ops.object.vertex_group_set_active(group=str('lower_basal_edge_loop'))
+    bpy.ops.object.vertex_group_deselect()
     # Relax orifice loop to reduce spikes in transition to valve.
     bpy.ops.mesh.looptools_relax(input='selected', interpolation='linear', iterations='5', regular=True)
     bpy.context.tool_settings.mesh_select_mode = (True, False, False)
@@ -675,15 +675,30 @@ def select_vertices_outside_of_edge_loop(obj):
     must_remove = False # No vertices needs to be removed.
     # Select vertices in edge loop with only two connecting vertices.
     for v in bm.verts:
-        if len(get_neighbour_vertices(v)) <= 2 and v.select: #v.index in vertices_orifice: 
+        if len(get_neighbour_vertices(v)) <= 2 and v.select: # v.index in vg lower_basal_edge_loop: 
+            cons_print(f"Found vertex with two neighbours: {v.index} at {v.co}")
+            if vertex_in_vertex_group(obj, v, 'lower_basal_edge_loop'):
+                cons_print(f"But it was in the other vertex group")
+                v.select = False
+                continue   
+            cons_print(f"Deleting vertex: {v.index} at position {v.co}")
             v.select = True
             must_remove = True
         else: v.select = False
+    bpy.ops.object.vertex_group_set_active(group="lower_basal_edge_loop")
+    bpy.ops.object.vertex_group_deselect()
     # Return to object mode and update the mesh to the obeject.
     bm.select_flush_mode()   
     me.update()
     bpy.ops.object.mode_set(mode='OBJECT') 
     return must_remove
+
+def vertex_in_vertex_group(obj, v, vertex_group_name):
+    """Check if a vertex v is in a given vertex groupof an object"""
+    if "lower_basal_edge_loop" in obj.vertex_groups:
+        for vg_v in [vert for vert in bpy.context.object.data.vertices if bpy.context.object.vertex_groups[vertex_group_name].index in [i.group for i in vert.groups]]:
+            if vg_v.index == v.index: return True
+    return False
 
 def build_valve_surface(context, obj, valve_mode, ratio, valve_index):
     """Copy valve object(mitral/aortic), combine it with the active geometry and select only boundary vertices. Boundary_only allows to delete all vertices except the boundary edge loop on the ventricle side"""
@@ -962,6 +977,8 @@ def smooth_basal_region(context, basal, voxel_size):
     bpy.ops.object.vertex_group_select()
     bpy.ops.object.vertex_group_set_active(group=str("Mitral_orifice"))
     bpy.ops.object.vertex_group_select()
+    bpy.ops.object.vertex_group_set_active(group=str("lower_basal_edge_loop"))
+    bpy.ops.object.vertex_group_deselect()
     # Smooth again with orifice selected.
     if context.scene.approach == 3 or context.scene.approach == 4: bpy.ops.mesh.remove_doubles(threshold=voxel_size * 0.9, use_sharp_edge_from_normals=False, use_unselected=False) # Don't remove for approach 5
     bpy.ops.mesh.vertices_smooth(factor=0.75, repeat=20)     
