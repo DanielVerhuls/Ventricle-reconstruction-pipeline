@@ -222,7 +222,6 @@ def remove_multiple_basal_region(context):
     deleted_verts = remove_basal_region(context, reference_copy, []) # Remove in reference object
     for obj in selected_objects: remove_basal_region(context, obj, deleted_verts) 
     # Longitudinal shift of each ventricle to match reference object, reducing volume discrepancy between systole and diastole between raw data and reconstructed data.
-    #find_max_value_after_basal_removal(context, selected_objects)
     shift_ventricles_longitudinally(context, selected_objects)
     context.scene.ref_maxima, context.scene.ref_minima = get_min_max(reference_copy)    
     # Cleanup.
@@ -338,8 +337,7 @@ def shift_ventricles_longitudinally(context, objects):
     """Shift ventricle to reference ventricle"""
     for obj in objects:
         max_obj_val, min_obj_val = get_min_max(obj)
-        shift_distance =  context.scene.remove_basal_threshold - max_obj_val[2] # context.scene.max_apical - max_obj_val[2]
-        print(f"Max of ventricle {max_obj_val[2]} creating difference of {shift_distance} towards reference height {context.scene.remove_basal_threshold}") #!!! remove
+        shift_distance =  context.scene.remove_basal_threshold - max_obj_val[2] 
         obj.select_set(True)
         bpy.context.view_layer.objects.active = obj
         obj['long_shift'] = shift_distance
@@ -786,20 +784,6 @@ def find_reference_ventricle_mean(objects):
             diff_to_mean = abs(volumes[counter] - mean_volume)
             bpy.types.Scene.reference_object_name = obj.name
     return bpy.types.Scene.reference_object_name
-
-def find_max_value_after_basal_removal(context, objects): #!!! remove
-    """Find the maximal z-value in all ventricle geometries after dissolving"""
-    for obj in objects: obj.select_set(False)
-    context.scene.max_apical = 0 # Reset maximum apical value.
-    # Find max value in z-direction.
-    for obj in objects:
-        # Select object,set is as active and deselect all its vertices.
-        obj.select_set(True)
-        bpy.context.view_layer.objects.active = obj
-        # Find the largest z-value in the vertices of the current object.
-        max_val, min_val = get_min_max(obj)
-        if max_val[2] > context.scene.max_apical: context.scene.max_apical = max_val[2]
-        obj.select_set(False)
 
 def create_basal_region_for_object(context, reference_copy):
     """Create basal part for a given ventricle"""
@@ -1902,7 +1886,6 @@ def register():
     bpy.types.Scene.remove_basal_threshold = bpy.props.FloatProperty(name="Threshold for the removal of the basal region", default=28.5,  min = 0)
     bpy.types.Scene.height_plane = bpy.props.FloatProperty(name="Cut-off value for the creation of the reference basal region", default=40,  min = 0.01)
     bpy.types.Scene.min_valves = bpy.props.FloatProperty(name="Minimal z-value of valves", default=45)
-    bpy.types.Scene.max_apical = bpy.props.FloatProperty(name="Maximal z-value of apical region after cutting", default=20)
     # Approach selection.
     bpy.types.Scene.approach = bpy.props.IntProperty(name="Chosen modeling approach", default=3, min = 3, max = 5)
     bpy.types.Scene.mean_reference = bpy.props.BoolProperty(name="Mean volume as reference", default=True)
