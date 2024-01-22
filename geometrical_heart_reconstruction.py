@@ -1,7 +1,7 @@
 bl_info = {
     "name" : "Geometrical heart reconstrucion", 
     "author" : "Daniel Verhuelsdonk",
-    "version" : (1, 30),
+    "version" : (2, 0),
     "blender" : (3, 1, 0),
     "location" : "Operator Search",
     "description": "Panel and operators to geometrically reconstruct the upper heart shape",
@@ -213,14 +213,16 @@ def remove_multiple_basal_region(context):
         cons_print("No elements selected.")
         return False
     selected_objects = context.selected_objects
-    reference_copy = copy_object(find_reference_ventricle_mean(selected_objects), 'reference') # Find object with max volume and create a copy of it as a reference object.
+    # Find reference object and create a copy of it as a reference object. This is either the mean or max value between all selected objects.
+    if bpy.types.Scene.mean_reference: reference_copy = copy_object(find_reference_ventricle_mean(selected_objects), 'reference')  
+    else: reference_copy = copy_object(find_reference_ventricle_max(selected_objects), 'reference')
     cons_print(f"Reference object: {bpy.types.Scene.reference_object_name}")
     for obj in selected_objects: obj.select_set(False) # Deselect objects.
     # Basal region removal. First for reference, then remaining objects.
     deleted_verts = remove_basal_region(context, reference_copy, []) # Remove in reference object
     for obj in selected_objects: remove_basal_region(context, obj, deleted_verts) 
     # Longitudinal shift of each ventricle to match reference object, reducing volume discrepancy between systole and diastole between raw data and reconstructed data.
-    find_max_value_after_basal_removal(context, selected_objects)
+    #find_max_value_after_basal_removal(context, selected_objects)
     shift_ventricles_longitudinally(context, selected_objects)
     context.scene.ref_maxima, context.scene.ref_minima = get_min_max(reference_copy)    
     # Cleanup.
@@ -333,8 +335,8 @@ def shift_ventricles_longitudinally(context, objects):
     """Shift ventricle to reference ventricle"""
     for obj in objects:
         max_obj_val, min_obj_val = get_min_max(obj)
-        shift_distance =  context.scene.max_apical - max_obj_val[2]
-        print(f"Max of ventricle {max_obj_val[2]} creating difference of {shift_distance} towards reference height {context.scene.max_apical}")
+        shift_distance =  context.scene.remove_basal_threshold - max_obj_val[2] # context.scene.max_apical - max_obj_val[2]
+        print(f"Max of ventricle {max_obj_val[2]} creating difference of {shift_distance} towards reference height {context.scene.remove_basal_threshold}") #!!! remove
         obj.select_set(True)
         bpy.context.view_layer.objects.active = obj
         obj['long_shift'] = shift_distance
@@ -543,6 +545,7 @@ def create_valve_orifice(context, valve_mode):
         if distance_vec(f.calc_center_median(), translation) < min(radius_vertical, radius_horizontal)  / 2: 
             for v in f.verts: vertices_orifice.append(v.index)
             f.select = True
+    sad
     # Delete face in orifice.
     faces = [f for f in bm.faces if f.select]
     bmesh.ops.delete(bm, geom = faces, context = 'FACES_ONLY')
@@ -572,9 +575,16 @@ def select_valve_vertices(context, valve_mode):
     mat = cut_obj_matrix @ original_obj.matrix_world         
     selected_verts = [v
         for v in mesh.verts
-        if is_inside((mat @ v.co), valve_area)]
+        if is_inside((mat @ v.co), valve_area)]  
     for v in selected_verts: 
-        if v.co.z > -1: v.select = True
+        if v.co.z > -1: v.select = True 
+    # Exclude vertice in lower basal edge loopa
+    for group in bpy.context.active_object.vertex_groups:
+        if group.name == "lower_basal_edge_loop":
+            bpy.ops.object.vertex_group_set_active(group=group.name)
+            bpy.ops.object.vertex_group_deselect()
+            break
+    # Remove vertices
     bpy.ops.object.mode_set(mode='OBJECT')
     bpy.data.objects.remove(bpy.data.objects[valve_area.name], do_unlink=True) # Remove valve area object.
     
@@ -716,7 +726,6 @@ def mesh_create_basal(context):
     reference_copy = copy_object(bpy.types.Scene.reference_object_name, 'basal_region')
     # Deselect objects.
     for obj in selected_objects: obj.select_set(False)
-          
     # Operations to create basal region of the ventricle.
     basal_regions = create_basal_region_for_object(context, reference_copy)
     if not basal_regions: 
@@ -759,7 +768,7 @@ def find_reference_ventricle_mean(objects):
             bpy.types.Scene.reference_object_name = obj.name
     return bpy.types.Scene.reference_object_name
 
-def find_max_value_after_basal_removal(context, objects):
+def find_max_value_after_basal_removal(context, objects): #!!! remove
     """Find the maximal z-value in all ventricle geometries after dissolving"""
     for obj in objects: obj.select_set(False)
     context.scene.max_apical = 0 # Reset maximum apical value.
@@ -798,8 +807,9 @@ def create_basal_region_for_object(context, reference_copy):
     # Remove apical regions.
     remove_apical_region(context, poisson_basal)
     # Remove nodes in valve areas, insert of interface nodes and smooth the basal region.
-    create_valve_orifice(context, "Mitral")
     create_valve_orifice(context, "Aortic")
+    create_valve_orifice(context, "Mitral")
+    
     basal_regions = insert_valves_into_basal(context, poisson_basal) # Create exact inputs for the valve boundaries and connect it with the remaining basal region.
     for basal in basal_regions: basal.select_set(False)
     for basal in basal_regions: smooth_basal_region(context, basal, voxel_size) # Smooth basal region nodes excluding valves and lower edge loop.
@@ -807,13 +817,13 @@ def create_basal_region_for_object(context, reference_copy):
 
 def compute_height_plane(context): 
     """Compute height of the plane used to cut off the apical region from the basal region of the reference geometry"""
-    if context.scene.min_valves <= context.scene.max_apical: # The apical region extends over the basal region.
-        cons_print(f"Error: Valves ({context.scene.min_valves}) lie beneath the highest point of the ventricle({context.scene.max_apical}). Try a different setup for valve position or dissolve loops.")
+    if context.scene.min_valves <= context.scene.remove_basal_threshold: # The apical region extends over the basal region.
+        cons_print(f"Error: Valves ({context.scene.min_valves}) lie beneath the highest point of the ventricle({context.scene.remove_basal_threshold}). Try a different setup for valve position or dissolve loops.")
         return False
-    elif context.scene.min_valves < 1.025 * context.scene.max_apical: # Basal and apical region lie very close to one another. This could lead to large kinks in the geometry.
+    elif context.scene.min_valves < 1.025 * context.scene.remove_basal_threshold: # Basal and apical region lie very close to one another. This could lead to large kinks in the geometry.
         cons_print("Info: The basal and apical region are very close to one another. The geometry may contain large kinks especially in the connection between those regions. Try a higher dissolve loop number or higher z-value for the input valves.")
     else: pass # Basal and apical region have enough distance.
-    context.scene.height_plane = (context.scene.max_apical + context.scene.min_valves) / 2 # Choose z-value between lowest valve vertex and highest basal vertex.
+    context.scene.height_plane = (4 * context.scene.remove_basal_threshold + context.scene.min_valves) / 5 # Choose z-value between lowest valve vertex and highest basal vertex.
     return True
 
 def apply_voxel_remesh(voxel_size):
@@ -1019,6 +1029,7 @@ def mesh_connect_apical_and_basal(context):
     # Create initial connection using a reference copy.
     reference = copy_object(bpy.types.Scene.reference_object_name, "reference")
     if not combine_apical_and_basal_region(context, basal_regions, reference, selected_objects): return False
+    cleanup_basal_region(context) # Cleanup: Delete basal regions.
     return True
 
 def combine_apical_and_basal_region(context, basal_regions, reference, selected_objects):
@@ -1139,7 +1150,7 @@ def bridge_edges_ventricle(obj, new_edges_vert_indices):
 
 def inset_faces_smooth(context):
     """Create new vertices along the connection between apical and basal region. This subdivision aims to more equally space the height and width of these faces"""
-    distance = context.scene.min_valves - context.scene.max_apical # Distance between lowest valve node and highest apical point of all ventricles after basal removal in z-direction.
+    distance = context.scene.min_valves - context.scene.remove_basal_threshold # Distance between lowest valve node and highest apical point of all ventricles after basal removal in z-direction.
     bpy.ops.object.mode_set(mode='EDIT')
     for counter, value in enumerate(range(context.scene.inset_faces_refinement_steps)):
         inset_thickness = distance / (2 * 2**(counter)) # Reduce the offset between newly added edge_loops by the factor 4.
@@ -1189,7 +1200,6 @@ def compute_smoothing_iteration_factor_connection(context, counter, volumelist):
         smoothing_iter_factor = 1
     smoothing_iter_factor = smoothing_iter_factor * 2 # Increase smoothing iteration factor by factor 2.
     if context.scene.approach == 5: smoothing_iter_factor = smoothing_iter_factor * 2 # Further increase it for approach 5 as it has a higher vertex density in the basal region.
-    cons_print(f"Smoothing_strength: {smoothing_iter_factor} for ventricle_{counter}")
     return smoothing_iter_factor
 
 def smooth_connection_and_basal_region(context, obj, smoothing_iter_factor): 
@@ -1199,7 +1209,7 @@ def smooth_connection_and_basal_region(context, obj, smoothing_iter_factor):
     bm = transfer_data_to_mesh(obj)
     for v in bm.verts: # Select all vertices above highest apical vertex in z-direction.
         vertex_coords = obj.matrix_world @ v.co 
-        if vertex_coords[2] > context.scene.max_apical: v.select = True
+        if vertex_coords[2] >= context.scene.remove_basal_threshold: v.select = True 
     bm.to_mesh(obj.data)
     bpy.ops.object.mode_set(mode='EDIT') 
     # Select all nodes inside the connection.
@@ -1407,6 +1417,7 @@ def compute_volumes(objects, bool_print):
         cons_print(f"Max volume (EDV): {max(volumelist)/1000} ml at position: {volumelist.index(max(volumelist))}")  
         cons_print(f"Min volume (ESV): {min(volumelist)/1000} ml at position: {volumelist.index(min(volumelist))}")  
         cons_print(f"Stroke volume: {(max(volumelist)-min(volumelist))/1000} ml")
+        cons_print(f"Volumelist: {volumelist}")
     return volumelist
 
 def compute_volume_area(obj):
@@ -1560,21 +1571,13 @@ class MESH_OT_ApproachSelection(bpy.types.Operator):
         return {'FINISHED'} 
 
 class MESH_DEV_color_min_dist(bpy.types.Operator):
-    """Test function for development"""
+    """Color all faces of the currently selected object with the minimal distance to a reference object 'ref_obj'. The colors range from blue to red (0-1) and are normalized with the maximum over all minimal distances"""
     bl_idname = 'heart.color_min_dist'
     bl_label = 'Color an object with its facewise minimal distance to a reference object'
     def execute(self, context):
         if not color_min_dist(context): return{'CANCELLED'}
         return{'FINISHED'}
     
-class MESH_DEV_test(bpy.types.Operator):
-    """Test function for development"""
-    bl_idname = 'heart.test'
-    bl_label = 'Empty test function'
-    def execute(self, context):
-        test_function(context)
-        return{'FINISHED'}
-
 def compute_colors(distances):
     """Compute face colors for the normalized distance value."""
     colors = []
@@ -1617,11 +1620,10 @@ def compute_min_face_distance(ico_face_center, other_obj_face_centers):
         if curr_dist < dist: dist = curr_dist
     return dist
 
-# !!!decorator?
+# Njit decorator to run this at machine speed
 @nb.njit
 def compute_distance(ico_face_center, other_face_center):
     """Efficiently compute distance between two vectors"""
-    cons_print(f"types: {type(ico_face_center)} and {type(other_face_center)}")
     return np.linalg.norm(ico_face_center - other_face_center)
 
 def color_min_dist(context):
@@ -1659,6 +1661,14 @@ def color_min_dist(context):
         face.select = False
     # Turn off edit mode
     bpy.ops.object.editmode_toggle()
+
+class MESH_DEV_test(bpy.types.Operator):
+    """Test function for development"""
+    bl_idname = 'heart.test'
+    bl_label = 'Empty test function'
+    def execute(self, context):
+        test_function(context)
+        return{'FINISHED'}
 
 def test_function(context):
     """Empty test function"""
@@ -1726,7 +1736,7 @@ class PANEL_Valves(bpy.types.Panel):
             layout.operator('heart.support_struct',  text= "Build support structure around valves", icon = 'PROP_ON')
                 
 class PANEL_Poisson(bpy.types.Panel): 
-    bl_label = "Poisson"
+    bl_label = "Poisson Surface Reconstruction"
     bl_idname = "PT_Poisson"
     bl_space_type = 'VIEW_3D'
     bl_region_type = 'UI'
@@ -1752,6 +1762,8 @@ class PANEL_Setup_Variables(bpy.types.Panel):
         layout = self.layout   
         row = layout.row()
         row.prop(context.scene, 'remove_basal_threshold', text="Threshold for basal region removal") 
+        row = layout.row()
+        row.prop(context.scene, 'mean_reference', text="Use mean instead of max volume as reference") 
         row = layout.row()
         row.label(text= "Interpolation variables") 
         row = layout.row()
@@ -1873,6 +1885,7 @@ def register():
     bpy.types.Scene.max_apical = bpy.props.FloatProperty(name="Maximal z-value of apical region after cutting", default=20)
     # Approach selection.
     bpy.types.Scene.approach = bpy.props.IntProperty(name="Chosen modeling approach", default=3, min = 3, max = 5)
+    bpy.types.Scene.mean_reference = bpy.props.BoolProperty(name="Mean volume as reference", default=True)
     # Possion algorithm.
     bpy.types.Scene.poisson_depth = bpy.props.IntProperty(name="Depth of possion algorithm", default=10,  min = 1)
     # Interpolation variables.

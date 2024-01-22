@@ -20,7 +20,7 @@ Go to the directory of Blender and run it with Python system environment
 cd PATH
 ./blender.exe --python-use-system-env
 ```
-## Installation of numba in Blender Python console
+## Installation of scipy numba in Blender Python console
 After opening Blender 3.1 using Powershell load the blend-file provided in the repository. It contains objects used in the addon.
 Open the integrated Blender Python console.
 ```bash
@@ -28,6 +28,7 @@ import sys
 import subprocess
 subprocess.call([sys.exec_prefix + '\\bin\\python.exe', '-m', 'ensurepip'])
 subprocess.call([sys.exec_prefix + '\\bin\\python.exe', '-m', 'pip', 'install', 'numba'])
+subprocess.call([sys.exec_prefix + '\\bin\\python.exe', '-m', 'pip', 'install', 'scipy'])
 ```
 If pip is missing (Output 0 in Blender Python console):
 ```bash
@@ -35,6 +36,7 @@ import ensurepip
 ensurepip.bootstrap()
 from pip._internal import main
 main(args=['install','numba'])
+main(args=['install','scipy'])
 ```
 ## Installation of Blender case with addons
 In Blender go to Edit→Preferences→Add-ons:
