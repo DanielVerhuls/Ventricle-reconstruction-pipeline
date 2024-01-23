@@ -1844,17 +1844,17 @@ class PANEL_Dev_tools(bpy.types.Panel):
     def draw(self, context):
         layout = self.layout
         row = layout.row()
-        layout.operator('heart.dev_volumes', text= "Compute volumes", icon = 'HOME')
+        layout.operator('heart.dev_volumes', text= "Compute volumes", icon = 'MESH_CUBE')
         row = layout.row()
         layout.operator('heart.dev_indices', text= "Get vertex indices", icon = 'THREE_DOTS')
         row = layout.row()
         layout.operator('heart.dev_check_edges', text= "Get edge index", icon = 'ARROW_LEFTRIGHT')
         row = layout.row()
-        layout.operator('heart.dev_check_node_connectivity', text= "Node-connectivity check", icon = 'CHECKMARK') 
+        layout.operator('heart.dev_check_node_connectivity', text= "Node-connectivity check", icon = 'MOD_PARTICLES') 
         row = layout.row()
-        layout.operator('heart.color_min_dist', text= "Color minimal distance to raw object", icon = 'CHECKMARK') 
-        row = layout.row()
-        layout.operator('heart.test', text= "Test function", icon = 'CHECKMARK')
+        layout.operator('heart.color_min_dist', text= "Color minimal distance to raw object", icon = 'COLORSET_04_VEC') 
+        #row = layout.row() # New button with test function
+        #layout.operator('heart.test', text= "Test function", icon = 'CHECKMARK')
 
 classes = [
     PANEL_Position_Ventricle, MESH_OT_ApproachSelection,
