@@ -673,10 +673,8 @@ def select_vertices_outside_of_edge_loop(obj):
     must_remove = False # No vertices needs to be removed.
     # Select vertices in edge loop with only two connecting vertices.
     for v in bm.verts:
-        if len(get_neighbour_vertices(v)) <= 2 and v.select: # v.index in vg lower_basal_edge_loop: 
-            cons_print(f"Found vertex with two neighbours: {v.index} at {v.co}")
+        if len(get_neighbour_vertices(v)) <= 2 and v.select: 
             if vertex_in_vertex_group(obj, v, 'lower_basal_edge_loop'):
-                cons_print(f"But it was in the other vertex group")
                 v.select = False
                 continue   
             cons_print(f"Deleting vertex: {v.index} at position {v.co}")
@@ -825,7 +823,7 @@ def compute_height_plane(context):
     elif context.scene.min_valves < 1.025 * context.scene.remove_basal_threshold: # Basal and apical region lie very close to one another. This could lead to large kinks in the geometry.
         cons_print("Info: The basal and apical region are very close to one another. The geometry may contain large kinks especially in the connection between those regions. Try a higher dissolve loop number or higher z-value for the input valves.")
     else: pass # Basal and apical region have enough distance.
-    context.scene.height_plane = (4 * context.scene.remove_basal_threshold + context.scene.min_valves) / 5 # Choose z-value between lowest valve vertex and highest basal vertex.
+    context.scene.height_plane = (context.scene.remove_basal_threshold + context.scene.min_valves) / 2 # Choose z-value between lowest valve vertex and highest basal vertex.
     return True
 
 def apply_voxel_remesh(voxel_size):
@@ -954,7 +952,7 @@ def smooth_basal_region(context, basal, voxel_size):
     select_only_inner_basal_vertices()
     bpy.ops.object.mode_set(mode='EDIT')
     # Merge close nodes and smooth them.
-    if context.scene.approach == 3 or context.scene.approach == 4: bpy.ops.mesh.remove_doubles(threshold= voxel_size * 0.9, use_sharp_edge_from_normals=False, use_unselected=False) # Don't remove for approach 5
+    if context.scene.approach == 3 or context.scene.approach == 4: bpy.ops.mesh.remove_doubles(threshold= voxel_size * 0.8, use_sharp_edge_from_normals=False, use_unselected=False) # Don't remove for approach 5
     bpy.ops.mesh.vertices_smooth(factor=0.75, repeat=10)
     # Select valve orifice edge loops for a better smoothing transition between valves and basal region.
     bpy.ops.object.vertex_group_set_active(group=str("Aortic_orifice"))
@@ -1185,11 +1183,9 @@ def triangulate_connection(bool_ref, obj, ref_edge_indices):
         bm.verts.ensure_lookup_table()
         # Create connecting edge between a and b
         for a, b in ref_edge_indices:
-            cons_print(f"Edge with vert:{a} and {b}") ###!!! remove me
-            cons_print(f"len: {len(ref_edge_indices)}")
-            #bm.edges.new((bm.verts[a], bm.verts[b]))
-            #bm.verts[a].select = True
-            #bm.verts[b].select = True
+            bm.edges.new((bm.verts[a], bm.verts[b]))
+            bm.verts[a].select = True
+            bm.verts[b].select = True
         # Create faces between connecting edges
         bpy.ops.object.mode_set(mode='OBJECT') # Necessary to update geometry in Blender.
         bpy.ops.object.mode_set(mode='EDIT') 
