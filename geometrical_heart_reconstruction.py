@@ -1043,7 +1043,7 @@ def combine_apical_and_basal_region(context, basal_regions, reference, selected_
         obj.select_set(False)  
         obj.hide_set(True)
     reference.select_set(False)
-    # Apply connecting operation for reference and save connecting edges used in the connection.
+    ## Apply connecting operation for reference and save connecting edges used in the connection.
     prepare_geometry_for_bridging(reference, basal_regions[0]) # Prepare geometry for bridging by removing the original basal region and replacing it with the reconstructed basal region.
     edge_indices_bridge = bridge_edges_reference(context, reference) # Create initial connection between the upper apical and lower basal edge loop.
     inset_faces_smooth(context) # Refine connection by separating long connection faces into more uniformly sized faces.
@@ -1056,7 +1056,7 @@ def combine_apical_and_basal_region(context, basal_regions, reference, selected_
     if volumelist.index(min(volumelist)) > volumelist.index(max(volumelist)) or volumelist.index(min(volumelist)) != 0: # If list is not sorted, interrupt function.
         cons_print(f"Ventricles not sorted. Interrupting...")
         return False
-    # Apply connecting-operation for remaining ventricle geometries.
+    ## Apply connecting-operation for remaining ventricle geometries.
     for counter, obj in enumerate(selected_objects):
         basal = basal_regions[get_valve_state_index(context, counter, frame_EDV)] # Choose basal region.
         # Apply connecting operation from reference.
@@ -1069,6 +1069,7 @@ def combine_apical_and_basal_region(context, basal_regions, reference, selected_
         bpy.ops.mesh.delete(type='ONLY_FACE') 
         bpy.ops.object.mode_set(mode='OBJECT')
         # Triangulate mesh.
+
         triangulate_connection(False, obj, edge_indices_triangulate)        
         # Add faces onto triangulation.
         bpy.ops.object.mode_set(mode='EDIT')
@@ -1157,14 +1158,16 @@ def inset_faces_smooth(context):
     distance = context.scene.min_valves - context.scene.remove_basal_threshold # Distance between lowest valve node and highest apical point of all ventricles after basal removal in z-direction.
     bpy.ops.object.mode_set(mode='EDIT')
     for counter, value in enumerate(range(context.scene.inset_faces_refinement_steps)):
-        inset_thickness = distance / (2 * 2**(counter)) # Reduce the offset between newly added edge_loops by the factor 4.
-        bpy.ops.mesh.inset(thickness= inset_thickness, depth=0, use_select_inset=True) # Insert faces along the bridge between apical and basal.
-        bpy.ops.mesh.vertices_smooth(factor=0.5, repeat=1 + counter)  # Smooth connection between apical and basal region including the newly added faces.
+        inset_thickness = distance / (4 * 2**(counter)) # Reduce the offset between newly added edge_loops by the factor 4.
+        bpy.ops.mesh.inset(thickness= inset_thickness, use_even_offset=False, depth=0, use_select_inset=True) # Insert faces along the bridge between apical and basal.
+        bpy.ops.mesh.vertices_smooth(factor=0.5, repeat= 1 + counter)  # Smooth connection between apical and basal region including the newly added faces.
     bpy.ops.object.mode_set(mode='OBJECT')
   
 def triangulate_connection(bool_ref, obj, ref_edge_indices):
     """Triangulate connection between apical and basal region"""
     edges_vert_indices_tri = []
+    
+    cons_print(f"Laenge ref_edge_indices: {len(ref_edge_indices)}")
     if bool_ref: # Initial triangulation as a reference.
         bpy.ops.object.mode_set(mode='EDIT') 
         selected_edges_before_indices, selected_edges_before_verts = get_selected_edges(obj) # Collect edge indices before operation.
@@ -1182,13 +1185,15 @@ def triangulate_connection(bool_ref, obj, ref_edge_indices):
         bm.verts.ensure_lookup_table()
         # Create connecting edge between a and b
         for a, b in ref_edge_indices:
-            bm.edges.new((bm.verts[a], bm.verts[b]))
-            bm.verts[a].select = True
-            bm.verts[b].select = True
+            cons_print(f"Edge with vert:{a} and {b}") ###!!! remove me
+            cons_print(f"len: {len(ref_edge_indices)}")
+            #bm.edges.new((bm.verts[a], bm.verts[b]))
+            #bm.verts[a].select = True
+            #bm.verts[b].select = True
         # Create faces between connecting edges
         bpy.ops.object.mode_set(mode='OBJECT') # Necessary to update geometry in Blender.
         bpy.ops.object.mode_set(mode='EDIT') 
-        bpy.ops.object.mode_set(mode='OBJECT') 
+        bpy.ops.object.mode_set(mode='OBJECT') # Change to object mode.
     return edges_vert_indices_tri
 
 def compute_smoothing_iteration_factor_connection(context, counter, volumelist):
