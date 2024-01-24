@@ -216,7 +216,7 @@ def remove_multiple_basal_region(context):
     # Find reference object and create a copy of it as a reference object. This is either the mean or max value between all selected objects.
     if bpy.types.Scene.mean_reference: reference_copy = copy_object(find_reference_ventricle_mean(selected_objects), 'reference')  
     else: reference_copy = copy_object(find_reference_ventricle_max(selected_objects), 'reference')
-    cons_print(f"Reference object: {bpy.types.Scene.reference_object_name}")
+    cons_print(f"Chosen reference object: {bpy.types.Scene.reference_object_name}")
     for obj in selected_objects: obj.select_set(False) # Deselect objects.
     # Basal region removal. First for reference, then remaining objects.
     deleted_verts = remove_basal_region(context, reference_copy, []) # Remove in reference object
@@ -1050,8 +1050,7 @@ def combine_apical_and_basal_region(context, basal_regions, reference, selected_
     frame_EDV = round(context.scene.time_diastole / context.scene.time_rr *  context.scene.frames_ventricle) 
     # Compute volume list for computation of the intensity of smoothing of the connection between basal and apical region.
     volumelist = compute_volumes(selected_objects, False)
-    if volumelist.index(min(volumelist)) > volumelist.index(max(volumelist)) or volumelist.index(min(volumelist)) != 0: # If list is not sorted, interrupt function.
-        cons_print(f"Warning: Ventricles not sorted. Interrupting...")
+    if volumelist.index(min(volumelist)) > volumelist.index(max(volumelist)) or volumelist.index(min(volumelist)) != 0: cons_print(f"Warning: Ventricles not sorted.") # If list is not sorted
     ## Apply connecting-operation for remaining ventricle geometries.
     for counter, obj in enumerate(selected_objects):
         basal = basal_regions[get_valve_state_index(context, counter, frame_EDV)] # Choose basal region.
@@ -1389,7 +1388,6 @@ class MESH_OT_Quick_Recon(bpy.types.Operator):
         if not mesh_create_basal(context): return{'CANCELLED'}# Operations to create basal region of the ventricle containing valve orifices.
         if not mesh_connect_apical_and_basal(context): return {'CANCELLED'} # Connect apical regions with corresponding bassal regions.
         add_vessels_and_valves(context) # Add surrounding objects including aorta, atrium and valves.
-        cleanup_basal_region(context) # Cleanup: Delete basal regions.
         return{'FINISHED'} 
 
 def cleanup_basal_region(context):
@@ -1628,7 +1626,7 @@ def compute_distance(ico_face_center, other_face_center):
 
 def color_min_dist(context):
     """Color an object with its facewise minimal distance to a reference object"""
-    cons_print(f"Coloring minimal face distance for obj")
+    cons_print(f"Coloring minimal face distance for obj.")
     # Deselect object vertices and faces
     if context.active_object: ico_object = context.active_object
     else: 
