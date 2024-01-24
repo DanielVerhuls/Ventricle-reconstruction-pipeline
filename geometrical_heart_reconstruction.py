@@ -579,7 +579,7 @@ def select_valve_vertices(context, valve_mode):
     for v in selected_verts: 
         if v.co.z > -1: v.select = True 
     # Exclude vertice in lower basal edge loopa
-    for group in bpy.context.active_object.vertex_groups: #!!! optiomierbar
+    for group in bpy.context.active_object.vertex_groups:
         if group.name == "lower_basal_edge_loop":
             bpy.ops.object.vertex_group_set_active(group=group.name)
             bpy.ops.object.vertex_group_deselect()
@@ -677,7 +677,6 @@ def select_vertices_outside_of_edge_loop(obj):
             if vertex_in_vertex_group(obj, v, 'lower_basal_edge_loop'):
                 v.select = False
                 continue   
-            cons_print(f"Deleting vertex: {v.index} at position {v.co}")
             v.select = True
             must_remove = True
         else: v.select = False
@@ -1052,8 +1051,7 @@ def combine_apical_and_basal_region(context, basal_regions, reference, selected_
     # Compute volume list for computation of the intensity of smoothing of the connection between basal and apical region.
     volumelist = compute_volumes(selected_objects, False)
     if volumelist.index(min(volumelist)) > volumelist.index(max(volumelist)) or volumelist.index(min(volumelist)) != 0: # If list is not sorted, interrupt function.
-        cons_print(f"Ventricles not sorted. Interrupting...")
-        return False
+        cons_print(f"Warning: Ventricles not sorted. Interrupting...")
     ## Apply connecting-operation for remaining ventricle geometries.
     for counter, obj in enumerate(selected_objects):
         basal = basal_regions[get_valve_state_index(context, counter, frame_EDV)] # Choose basal region.
@@ -1067,7 +1065,6 @@ def combine_apical_and_basal_region(context, basal_regions, reference, selected_
         bpy.ops.mesh.delete(type='ONLY_FACE') 
         bpy.ops.object.mode_set(mode='OBJECT')
         # Triangulate mesh.
-
         triangulate_connection(False, obj, edge_indices_triangulate)        
         # Add faces onto triangulation.
         bpy.ops.object.mode_set(mode='EDIT')
@@ -1164,8 +1161,6 @@ def inset_faces_smooth(context):
 def triangulate_connection(bool_ref, obj, ref_edge_indices):
     """Triangulate connection between apical and basal region"""
     edges_vert_indices_tri = []
-    
-    cons_print(f"Laenge ref_edge_indices: {len(ref_edge_indices)}")
     if bool_ref: # Initial triangulation as a reference.
         bpy.ops.object.mode_set(mode='EDIT') 
         selected_edges_before_indices, selected_edges_before_verts = get_selected_edges(obj) # Collect edge indices before operation.
