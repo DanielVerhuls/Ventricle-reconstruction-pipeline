@@ -1,7 +1,7 @@
 bl_info = {
     "name" : "Geometrical heart reconstrucion", 
     "author" : "Daniel Verhuelsdonk",
-    "version" : (2, 0),
+    "version" : (2, 1),
     "blender" : (3, 1, 0),
     "location" : "Operator Search",
     "description": "Panel and operators to geometrically reconstruct the upper heart shape",
