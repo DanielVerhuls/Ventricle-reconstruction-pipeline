@@ -1,8 +1,17 @@
 # Geometric-ventricle-reconstruction Pipeline
 ## Description
 Blender-addon for the geometric reconstruction of time-varying 3D ventricle geometries lacking good spatial resolution of the mitral and the aortic valve. Paper-link:!!!
+
+Three accompanying videos exist and will be referred to throughout the tutorial.
+
+Installation - https://www.youtube.com/watch?v=cKEKuLW4oYE
+
+Use - https://www.youtube.com/watch?v=0sduwcDeSm8
+
+Downstream CFD simulations - https://www.youtube.com/watch?v=C1O20YvkCJs
+
 # Installation
-Installation-video: !!!
+Installation-video: https://www.youtube.com/watch?v=cKEKuLW4oYE
 - Install Blender 3.1
 - Install Python
 - Install pip: https://pip.pypa.io/en/stable/installation/
@@ -44,8 +53,8 @@ In Blender go to Edit→Preferences→Add-ons:
 - Install ventricle-reconstruction-pipeline.py from repository and tick the checkbox to install it for the current blend-file
 - After that a new category should appear on the right side of the 3D Viewport called 'GVR-Pipeline'. Clicking it will open panels containing buttons,etc. used for the pipeline.
 # Usage
-Video-tutorial:!!!\
-Installation description:\
+Video-tutorial: https://www.youtube.com/watch?v=0sduwcDeSm8\
+Installation description: https://www.youtube.com/watch?v=cKEKuLW4oYE\
 Open blend-file provided in the repository and follow the following steps.
 ## Import ventricle geometries 
 File→Import→.STL→ Select all files (Note that the order is important. Order by name from ventricle_0 ... ventricle_x)\
@@ -121,6 +130,7 @@ File→Export→.STL→
 - keep the other options at default
 - leave name empty\
 →export STL
+- Video on how to use the pipeline in further CFD simulations at https://www.youtube.com/watch?v=C1O20YvkCJs
 ## Optional usage: Development tools panel
 ### Compute volumes
 Compute volumes of all selected objects and prints them to the Blender Python console.
