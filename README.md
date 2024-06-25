@@ -1,4 +1,4 @@
-# Geometric-ventricle-reconstruction Pipeline
+# IP-Heart: Interactive Pipeline to perform Geometry Processing for CFD models of Ventricular Blood Flow
 ## Description
 Blender-addon for the geometric reconstruction of time-varying 3D ventricle geometries lacking good spatial resolution of the mitral and the aortic valve. Paper-link:!!!
 # Installation
