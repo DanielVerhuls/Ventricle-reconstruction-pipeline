@@ -1,6 +1,6 @@
 # Geometric-ventricle-reconstruction Pipeline
 ## Description
-Blender-addon for the geometric reconstruction of time-varying 3D ventricle geometries lacking good spatial resolution of the mitral and the aortic valve. Paper-link:!!!
+Blender-addon for the geometric reconstruction of time-varying 3D ventricle geometries lacking good spatial resolution of the mitral and the aortic valve. Paper-link: https://engrxiv.org/preprint/view/3784
 
 Three accompanying videos exist and will be referred to throughout the tutorial.
 
@@ -152,8 +152,8 @@ During the usage of the pipeline the longitudinal shift is saved as a variable b
 # Application
 This tool was used in the following 2 publications:
 
-### 1. Quantifying the Impact of Mitral Valve Anatomy on Clinical Markers Using Surrogate Models and Sensitivity Analysis 
-Link:!!!TBA!!!
+### 1. Quantifying the Impact of Mitral Valve Anatomy on Clinical Markers Using Surrogate Models and Sensitivity Analysis
+https://engrxiv.org/preprint/view/3785
 
 This pipeline was used to create the ventricle geometries that were used to run Ansys Fluent CFD simulations necessary for training the surrogate models. More details on using this automated CFD model and the corresponding setup files can be found here:
 
@@ -162,7 +162,7 @@ https://doi.org/10.5281/zenodo.12519189
 https://www.youtube.com/watch?v=gO0ZYzpblLA
 
 ### 2. An interactive computational pipeline to investigate ventricular hemodynamics with real-time three-dimensional echocardiography and computational fluid dynamics
-Link:!!!TBA!!!
+https://engrxiv.org/preprint/view/3784
 
 This pipeline was used to perform geometry processing for CFD models of ventricular blood flow. We showcase its use on real-time three-dimensional echocardiography data of three patient datasets from two different clinical centers.
 
