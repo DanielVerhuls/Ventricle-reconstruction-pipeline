@@ -149,8 +149,22 @@ During the usage of the pipeline the longitudinal shift is saved as a variable b
 - Author: Daniel Verhülsdonk
 - Supervision by: Jan-Niklas Thiel and Michael Neidlin (neidlin@ame.rwth-aachen.de)
 
-# Project status
-Development has been terminated. 
+# Application
+This tool was used in the following 2 publications:
+
+### 1. Quantifying the Impact of Mitral Valve Anatomy on Clinical Markers Using Surrogate Models and Sensitivity Analysis 
+Link:!!!TBA!!!
+
+This pipeline was used to create the ventricle geometries that were used to run Ansys Fluent CFD simulations necessary for training the surrogate models. More details on using this automated CFD model and the corresponding setup files can be found here:
+
+https://doi.org/10.5281/zenodo.12519189
+
+https://www.youtube.com/watch?v=gO0ZYzpblLA
+
+### 2. An interactive computational pipeline to investigate ventricular hemodynamics with real-time three-dimensional echocardiography and computational fluid dynamics
+Link:!!!TBA!!!
+
+This pipeline was used to perform geometry processing for CFD models of ventricular blood flow. We showcase its use on real-time three-dimensional echocardiography data of three patient datasets from two different clinical centers.
 
 # License
 MIT License
