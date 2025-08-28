@@ -147,13 +147,13 @@ Check the node-connectivity of all selected objects. This includes:
 During the usage of the pipeline the longitudinal shift is saved as a variable bound to the respective object (ventricle 0 ... X). The user has to re-import the raw data and rename it to 'ref_obj'. While the reconstructed object is selected pressing the button 'Color minimal distance to raw object' will compute the minimal distance from each face-center of the reconstructed ventricle to any face-center of the reference object resulting in a 3d-representation of the Hausdorff distance (https://cgm.cs.mcgill.ca/~godfried/teaching/cg-projects/98/normand/main.html). The faces of the object are then colored with the distances which are normalized with the maximum value resulting in a scale from 0 to 1 (blue→white→red). To view the colors select 'Material Preview' in Blender (top right in 3D Viewport). This process give a qualitative visual representation of the quality of the reconstruction pipeline.
 # Authors and acknowledgment
 - Author: Daniel Verhülsdonk
-- Supervision by: Jan-Niklas Thiel and Michael Neidlin (neidlin@ame.rwth-aachen.de)
+- Supervision by: Jan-Niklas Thiel (thiel@ame.rwth-aachen.de) and Michael Neidlin
 
 # Application
 This tool was used in the following 2 publications:
 
 ### 1. Quantifying the Impact of Mitral Valve Anatomy on Clinical Markers Using Surrogate Models and Sensitivity Analysis
-https://engrxiv.org/preprint/view/3785
+https://doi.org/10.1016/j.compbiomed.2025.110265
 
 This pipeline was used to create the ventricle geometries that were used to run Ansys Fluent CFD simulations necessary for training the surrogate models. More details on using this automated CFD model and the corresponding setup files can be found here:
 
@@ -162,7 +162,7 @@ https://doi.org/10.5281/zenodo.12519189
 https://www.youtube.com/watch?v=gO0ZYzpblLA
 
 ### 2. An interactive computational pipeline to investigate ventricular hemodynamics with real-time three-dimensional echocardiography and computational fluid dynamics
-https://engrxiv.org/preprint/view/3784
+https://doi.org/10.1002/eng2.13041
 
 This pipeline was used to perform geometry processing for CFD models of ventricular blood flow. We showcase its use on real-time three-dimensional echocardiography data of three patient datasets from two different clinical centers.
 
