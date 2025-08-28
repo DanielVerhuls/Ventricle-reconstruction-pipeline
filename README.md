@@ -1,6 +1,6 @@
 # Geometric-ventricle-reconstruction Pipeline
 ## Description
-Blender-addon for the geometric reconstruction of time-varying 3D ventricle geometries lacking good spatial resolution of the mitral and the aortic valve. Paper-link: https://engrxiv.org/preprint/view/3784
+Blender-addon for the geometric reconstruction of time-varying 3D ventricle geometries lacking good spatial resolution of the mitral and the aortic valve. Detailed information can be found in this [paper](https://doi.org/10.1002/eng2.13041).
 
 Three accompanying videos exist and will be referred to throughout the tutorial.
 
